@@ -1798,4 +1798,3 @@ else:
         "de considerar prazos de entrega, dias de encomenda, "
         "mínimos, múltiplos de caixas, feriados e promoções."
     )
-  Create Inviora Streamlit application
