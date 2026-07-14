@@ -10,54 +10,11 @@ import streamlit as st
 from pypdf import PdfReader
 
 
-# =========================================================
-# INVIORA
-# Smart Inventory Intelligence
-# Versão 0.3.0
-# =========================================================
-
 st.set_page_config(
     page_title="Inviora",
     page_icon="📦",
     layout="wide",
     initial_sidebar_state="expanded",
-)
-
-
-st.markdown(
-    """
-    <style>
-
-        .block-container {
-            padding-top: 1.4rem;
-            padding-bottom: 2rem;
-        }
-
-        [data-testid="stSidebar"] {
-            border-right: 1px solid rgba(128,128,128,0.18);
-        }
-
-        .inviora-brand {
-            font-size: 2rem;
-            font-weight: 800;
-            letter-spacing: 0.08em;
-        }
-
-        .inviora-tagline {
-            opacity: 0.72;
-            margin-top: -0.4rem;
-            margin-bottom: 1.4rem;
-        }
-
-        div[data-testid="stMetric"] {
-            border: 1px solid rgba(128,128,128,0.20);
-            padding: 0.8rem 1rem;
-            border-radius: 0.8rem;
-        }
-
-    </style>
-    """,
-    unsafe_allow_html=True,
 )
 
 
@@ -78,7 +35,7 @@ DIAS_SAIDA = [
 
 
 # =========================================================
-# MEMÓRIA
+# MEMÓRIA DA APLICAÇÃO
 # =========================================================
 
 if "inventarios" not in st.session_state:
@@ -86,8 +43,10 @@ if "inventarios" not in st.session_state:
     st.session_state.inventarios = {
 
         fornecedor: {
-            "Atual": None,
-            "Anterior": None,
+
+            periodo: None
+
+            for periodo in PERIODOS
         }
 
         for fornecedor in FORNECEDORES
@@ -99,8 +58,10 @@ if "nomes_ficheiros" not in st.session_state:
     st.session_state.nomes_ficheiros = {
 
         fornecedor: {
-            "Atual": None,
-            "Anterior": None,
+
+            periodo: None
+
+            for periodo in PERIODOS
         }
 
         for fornecedor in FORNECEDORES
@@ -127,19 +88,22 @@ if "faturas" not in st.session_state:
 
 
 if "cobertura" not in st.session_state:
+
     st.session_state.cobertura = 1.0
 
 
 if "seguranca" not in st.session_state:
+
     st.session_state.seguranca = 15
 
 
 if "multiplo" not in st.session_state:
+
     st.session_state.multiplo = 1
 
 
 # =========================================================
-# FUNÇÕES DE TEXTO
+# FUNÇÕES GERAIS
 # =========================================================
 
 def normalizar_texto(valor):
@@ -157,7 +121,9 @@ def normalizar_texto(valor):
 
         for letra in texto
 
-        if not unicodedata.combining(letra)
+        if not unicodedata.combining(
+            letra
+        )
     )
 
     texto = texto.lower().strip()
@@ -180,12 +146,16 @@ def normalizar_referencia(valor):
     texto = str(valor).strip()
 
     if texto.endswith(".0"):
+
         texto = texto[:-2]
 
     return texto
 
 
-def formatar_numero(valor, casas=0):
+def formatar_numero(
+    valor,
+    casas=0,
+):
 
     try:
 
@@ -213,152 +183,6 @@ def formatar_numero(valor, casas=0):
 
         return "0"
 
-
-# =========================================================
-# IDENTIFICAÇÃO DAS COLUNAS
-# =========================================================
-
-ALIASES = {
-
-    "referencia": [
-        "referencia",
-        "ref",
-        "codigo",
-        "codigo artigo",
-        "cod artigo",
-        "artigo",
-        "codigo produto",
-    ],
-
-    "produto": [
-        "designacao",
-        "descricao",
-        "produto",
-        "nome produto",
-        "designacao artigo",
-    ],
-
-    "stock_inicial": [
-        "inicial",
-        "stock inicial",
-        "existencia inicial",
-        "saldo inicial",
-    ],
-
-    "entradas": [
-        "entrada",
-        "entradas",
-        "quantidade entradas",
-        "qtd entradas",
-    ],
-
-    "saidas": [
-        "saida",
-        "saidas",
-        "vendas",
-        "quantidade saidas",
-        "qtd saidas",
-        "quantidade vendida",
-    ],
-
-    "stock_final": [
-        "final",
-        "stock final",
-        "stock atual",
-        "existencia final",
-        "saldo final",
-    ],
-
-    "valor_entradas": [
-        "valor entradas",
-        "valor de entradas",
-    ],
-
-    "valor_saidas": [
-        "valor saidas",
-        "valor vendas",
-        "total vendas",
-        "valor de saidas",
-    ],
-
-    "data": [
-        "data",
-        "data documento",
-        "data movimento",
-        "data venda",
-        "data faturacao",
-    ],
-}
-
-
-MAPA_COLUNAS = {}
-
-
-for nome_final, alternativas in ALIASES.items():
-
-    for alternativa in alternativas:
-
-        MAPA_COLUNAS[
-            normalizar_texto(alternativa)
-        ] = nome_final
-
-
-def identificar_coluna(nome):
-
-    nome_normalizado = normalizar_texto(nome)
-
-    if nome_normalizado in MAPA_COLUNAS:
-
-        return MAPA_COLUNAS[
-            nome_normalizado
-        ]
-
-    for alternativa, nome_final in sorted(
-
-        MAPA_COLUNAS.items(),
-
-        key=lambda item: len(item[0]),
-
-        reverse=True,
-    ):
-
-        if len(alternativa) >= 5:
-
-            if (
-
-                nome_normalizado.startswith(
-                    alternativa
-                )
-
-                or nome_normalizado.endswith(
-                    alternativa
-                )
-            ):
-
-                return nome_final
-
-    return None
-
-
-def pontuar_cabecalho(valores):
-
-    encontrados = set()
-
-    for valor in valores:
-
-        coluna = identificar_coluna(
-            valor
-        )
-
-        if coluna:
-            encontrados.add(coluna)
-
-    return len(encontrados)
-
-
-# =========================================================
-# CONVERSÃO DE NÚMEROS
-# =========================================================
 
 def converter_numeros(serie):
 
@@ -464,20 +288,179 @@ def converter_numeros(serie):
     ).fillna(0)
 
 
+def converter_para_excel(
+    dados,
+    folha="Dados",
+):
+
+    memoria = io.BytesIO()
+
+    with pd.ExcelWriter(
+
+        memoria,
+
+        engine="openpyxl",
+
+    ) as writer:
+
+        dados.to_excel(
+
+            writer,
+
+            index=False,
+
+            sheet_name=folha[:31],
+        )
+
+    memoria.seek(0)
+
+    return memoria.getvalue()
+
+
 # =========================================================
-# LIMPEZA
+# IDENTIFICAÇÃO DAS COLUNAS
+# =========================================================
+
+ALIASES = {
+
+    "referencia": [
+        "referencia",
+        "ref",
+        "codigo",
+        "codigo artigo",
+        "cod artigo",
+        "artigo",
+        "codigo produto",
+    ],
+
+    "produto": [
+        "designacao",
+        "descricao",
+        "produto",
+        "nome produto",
+        "designacao artigo",
+    ],
+
+    "entradas": [
+        "entrada",
+        "entradas",
+        "quantidade entradas",
+        "qtd entradas",
+    ],
+
+    "saidas": [
+        "saida",
+        "saidas",
+        "vendas",
+        "quantidade saidas",
+        "qtd saidas",
+        "quantidade vendida",
+    ],
+
+    "stock_final": [
+        "final",
+        "stock final",
+        "stock atual",
+        "existencia final",
+        "saldo final",
+        "stock",
+    ],
+
+    "data": [
+        "data",
+        "data documento",
+        "data movimento",
+        "data venda",
+        "data faturacao",
+    ],
+}
+
+
+MAPA_COLUNAS = {}
+
+
+for nome_final, alternativas in ALIASES.items():
+
+    for alternativa in alternativas:
+
+        MAPA_COLUNAS[
+            normalizar_texto(
+                alternativa
+            )
+        ] = nome_final
+
+
+def identificar_coluna(nome):
+
+    nome_normalizado = normalizar_texto(
+        nome
+    )
+
+    if nome_normalizado in MAPA_COLUNAS:
+
+        return MAPA_COLUNAS[
+            nome_normalizado
+        ]
+
+    for alternativa, nome_final in sorted(
+
+        MAPA_COLUNAS.items(),
+
+        key=lambda item: len(
+            item[0]
+        ),
+
+        reverse=True,
+    ):
+
+        if len(alternativa) >= 5:
+
+            if (
+
+                nome_normalizado.startswith(
+                    alternativa
+                )
+
+                or nome_normalizado.endswith(
+                    alternativa
+                )
+            ):
+
+                return nome_final
+
+    return None
+
+
+def pontuar_cabecalho(valores):
+
+    encontrados = set()
+
+    for valor in valores:
+
+        coluna = identificar_coluna(
+            valor
+        )
+
+        if coluna:
+
+            encontrados.add(
+                coluna
+            )
+
+    return len(encontrados)
+
+
+# =========================================================
+# LEITURA DOS EXCEL
 # =========================================================
 
 def limpar_linhas_tecnicas(dados):
-
-    if dados is None:
-        return dados
 
     dados = dados.copy()
 
     if "produto" in dados.columns:
 
-        produto_normalizado = (
+        nomes = (
 
             dados["produto"]
 
@@ -488,23 +471,23 @@ def limpar_linhas_tecnicas(dados):
             )
         )
 
-        ignorar = produto_normalizado.isin(
-            [
-                "total",
-                "totais",
-                "subtotal",
-                "rappel",
-                "rapel",
-            ]
-        )
-
         dados = dados.loc[
-            ~ignorar
+
+            ~nomes.isin(
+                [
+                    "total",
+                    "totais",
+                    "subtotal",
+                    "rappel",
+                    "rapel",
+                ]
+            )
+
         ].copy()
 
     if "referencia" in dados.columns:
 
-        referencia_normalizada = (
+        referencias = (
 
             dados["referencia"]
 
@@ -515,29 +498,24 @@ def limpar_linhas_tecnicas(dados):
             )
         )
 
-        ignorar_referencia = (
+        dados = dados.loc[
 
-            referencia_normalizada.isin(
+            ~referencias.isin(
                 [
                     "ra",
                     "rappel",
                     "rapel",
                 ]
             )
-        )
 
-        dados = dados.loc[
-            ~ignorar_referencia
         ].copy()
 
     return dados
 
 
-# =========================================================
-# LEITURA DOS EXCEL
-# =========================================================
-
-def ler_ficheiro_tabular(ficheiro):
+def ler_ficheiro_tabular(
+    ficheiro
+):
 
     conteudo = ficheiro.getvalue()
 
@@ -555,46 +533,18 @@ def ler_ficheiro_tabular(ficheiro):
 
     if extensao == "csv":
 
-        ultimo_erro = None
+        dados = pd.read_csv(
 
-        for encoding in [
+            io.BytesIO(
+                conteudo
+            ),
 
-            "utf-8-sig",
-            "utf-8",
-            "latin-1",
+            sep=None,
 
-        ]:
+            engine="python",
+        )
 
-            try:
-
-                dados = pd.read_csv(
-
-                    io.BytesIO(
-                        conteudo
-                    ),
-
-                    sep=None,
-
-                    engine="python",
-
-                    encoding=encoding,
-                )
-
-                linha_cabecalho = 0
-
-                break
-
-            except Exception as erro:
-
-                ultimo_erro = erro
-
-        else:
-
-            raise ValueError(
-
-                f"Não foi possível ler o CSV: "
-                f"{ultimo_erro}"
-            )
+        linha_cabecalho = 0
 
     else:
 
@@ -615,8 +565,20 @@ def ler_ficheiro_tabular(ficheiro):
 
         pontuacoes = amostra.apply(
 
-            lambda linha: pontuar_cabecalho(
-                linha.tolist()
+            lambda linha: len(
+
+                {
+                    identificar_coluna(
+                        valor
+                    )
+
+                    for valor
+                    in linha.tolist()
+
+                    if identificar_coluna(
+                        valor
+                    )
+                }
             ),
 
             axis=1,
@@ -654,20 +616,13 @@ def ler_ficheiro_tabular(ficheiro):
 
         str(coluna).strip()
 
-        if str(coluna).strip()
-
-        else f"coluna_{indice}"
-
-        for indice, coluna
-
-        in enumerate(
-            dados.columns
-        )
+        for coluna
+        in dados.columns
     ]
 
     renomear = {}
 
-    utilizados = set()
+    usados = set()
 
     for coluna in dados.columns:
 
@@ -680,14 +635,14 @@ def ler_ficheiro_tabular(ficheiro):
             nome_final
 
             and nome_final
-            not in utilizados
+            not in usados
         ):
 
             renomear[
                 coluna
             ] = nome_final
 
-            utilizados.add(
+            usados.add(
                 nome_final
             )
 
@@ -697,12 +652,9 @@ def ler_ficheiro_tabular(ficheiro):
 
     for coluna in [
 
-        "stock_inicial",
         "entradas",
         "saidas",
         "stock_final",
-        "valor_entradas",
-        "valor_saidas",
 
     ]:
 
@@ -727,21 +679,6 @@ def ler_ficheiro_tabular(ficheiro):
             normalizar_referencia
         )
 
-    if "data" in dados.columns:
-
-        dados[
-            "data"
-        ] = pd.to_datetime(
-
-            dados[
-                "data"
-            ],
-
-            errors="coerce",
-
-            dayfirst=True,
-        )
-
     dados = limpar_linhas_tecnicas(
         dados
     )
@@ -757,9 +694,6 @@ def ler_ficheiro_tabular(ficheiro):
 
 
 def garantir_produto(dados):
-
-    if dados is None:
-        return None
 
     dados = dados.copy()
 
@@ -790,10 +724,6 @@ def garantir_produto(dados):
     return dados
 
 
-# =========================================================
-# ACESSO AOS INVENTÁRIOS
-# =========================================================
-
 def obter_inventario(
     fornecedor,
     periodo="Atual",
@@ -801,12 +731,10 @@ def obter_inventario(
 
     return st.session_state.inventarios[
         fornecedor
-    ][
-        periodo
-    ]
+    ][periodo]
 
 
-def inventarios_carregados(
+def juntar_inventarios(
     periodo="Atual",
 ):
 
@@ -836,6 +764,7 @@ def inventarios_carregados(
             )
 
     if not blocos:
+
         return None
 
     return pd.concat(
@@ -848,10 +777,16 @@ def inventarios_carregados(
     )
 
 
+# =========================================================
+# FORNECEDORES
+# =========================================================
+
 def referencias_por_fornecedor():
 
     referencias = {
+
         "Logista": set(),
+
         "Tabaqueira": set(),
     }
 
@@ -860,26 +795,39 @@ def referencias_por_fornecedor():
         for periodo in PERIODOS:
 
             dados = obter_inventario(
+
                 fornecedor,
+
                 periodo,
             )
 
             if (
+
                 dados is not None
-                and "referencia" in dados.columns
+
+                and "referencia"
+                in dados.columns
             ):
 
-                lista_referencias = (
-                    dados["referencia"]
+                lista = (
+
+                    dados[
+                        "referencia"
+                    ]
+
                     .dropna()
-                    .map(normalizar_referencia)
+
+                    .map(
+                        normalizar_referencia
+                    )
+
                     .tolist()
                 )
 
                 referencias[
                     fornecedor
                 ].update(
-                    lista_referencias
+                    lista
                 )
 
     return referencias
@@ -895,14 +843,15 @@ def identificar_fornecedor(
 
     referencias = referencias_por_fornecedor()
 
-    # Os produtos da Logista são exclusivos.
-    if referencia in referencias["Logista"]:
+    if referencia in referencias[
+        "Logista"
+    ]:
 
         return "Logista"
 
-    # Os restantes produtos reconhecidos
-    # pertencem à Tabaqueira.
-    if referencia in referencias["Tabaqueira"]:
+    if referencia in referencias[
+        "Tabaqueira"
+    ]:
 
         return "Tabaqueira"
 
@@ -910,12 +859,15 @@ def identificar_fornecedor(
 
 
 # =========================================================
-# LEITURA DAS FATURAS PDF
+# FATURAS PDF
 # =========================================================
 
-def extrair_texto_pdf(ficheiro):
+def extrair_texto_pdf(
+    ficheiro
+):
 
     leitor = PdfReader(
+
         io.BytesIO(
             ficheiro.getvalue()
         )
@@ -925,34 +877,34 @@ def extrair_texto_pdf(ficheiro):
 
     for pagina in leitor.pages:
 
-        texto = ""
-
         try:
 
             texto = pagina.extract_text(
+
                 extraction_mode="layout"
+
             ) or ""
 
         except Exception:
 
             texto = pagina.extract_text() or ""
 
-        textos.append(texto)
+        textos.append(
+            texto
+        )
 
     return textos
 
 
-def extrair_cabecalho_fatura(texto):
+def extrair_cabecalho_fatura(
+    texto
+):
 
-    numero_fatura = None
+    numero_fatura = "Sem número"
 
-    cliente = None
+    data_fatura = ""
 
-    vendedor = None
-
-    data_fatura = None
-
-    correspondencia = re.search(
+    resultado = re.search(
 
         r"FT\d+[A-Z]\d+/(\d+)",
 
@@ -961,10 +913,10 @@ def extrair_cabecalho_fatura(texto):
         flags=re.IGNORECASE,
     )
 
-    if correspondencia:
+    if resultado:
 
-        numero_fatura = (
-            correspondencia.group(1)
+        numero_fatura = resultado.group(
+            1
         )
 
     datas = re.findall(
@@ -975,113 +927,52 @@ def extrair_cabecalho_fatura(texto):
     )
 
     if datas:
+
         data_fatura = datas[0]
-
-    linhas = [
-
-        linha.strip()
-
-        for linha in texto.splitlines()
-
-        if linha.strip()
-    ]
-
-    for indice, linha in enumerate(
-        linhas
-    ):
-
-        if (
-
-            "data cliente vend"
-
-            in normalizar_texto(
-                linha
-            )
-        ):
-
-            numeros = []
-
-            for proxima in linhas[
-                indice + 1:
-                indice + 7
-            ]:
-
-                numeros.extend(
-
-                    re.findall(
-                        r"\b\d+\b",
-                        proxima,
-                    )
-                )
-
-            if len(numeros) >= 2:
-
-                cliente = numeros[0]
-
-                vendedor = numeros[1]
-
-                break
 
     return {
 
-        "numero_fatura": (
-            numero_fatura
-            or "Sem número"
-        ),
+        "numero_fatura": numero_fatura,
 
-        "cliente": (
-            cliente
-            or "Não identificado"
-        ),
+        "cliente": "Não identificado",
 
-        "vendedor": (
-            vendedor
-            or "Não identificado"
-        ),
+        "vendedor": "Não identificado",
 
-        "data_fatura": (
-            data_fatura
-            or ""
-        ),
+        "data_fatura": data_fatura,
     }
 
 
-def extrair_linhas_fatura(texto):
+def extrair_artigos_fatura(
+    texto
+):
 
     artigos = []
 
-    # Normaliza espaços, mas preserva as linhas.
-    linhas = [
+    padrao = re.compile(
 
-        re.sub(
-            r"\s+",
-            " ",
-            linha.strip(),
-        )
-
-        for linha in texto.splitlines()
-
-        if linha.strip()
-    ]
-
-    padrao_principal = re.compile(
-
-        r"^(?P<referencia>\d+)\s+"
+        r"^(?P<referencia>\d{2,6})\s+"
 
         r"(?P<produto>.+?)\s+"
 
         r"(?P<quantidade>\d+(?:[.,]\d+)?)\s+"
 
-        r"M\d+\s+"
-
-        r"Reg\b",
+        r"M\d+\s+Reg\b",
 
         flags=re.IGNORECASE,
     )
 
-    for linha in linhas:
+    for linha in texto.splitlines():
 
-        resultado = padrao_principal.search(
+        linha = re.sub(
+
+            r"\s+",
+
+            " ",
+
+            linha.strip(),
+        )
+
+        resultado = padrao.search(
             linha
         )
 
@@ -1089,108 +980,59 @@ def extrair_linhas_fatura(texto):
 
             continue
 
-        referencia = normalizar_referencia(
-
-            resultado.group(
-                "referencia"
-            )
-        )
-
-        produto = resultado.group(
-            "produto"
-        ).strip()
-
-        quantidade = float(
-
-            resultado.group(
-                "quantidade"
-            ).replace(
-                ",",
-                ".",
-            )
-        )
-
         artigos.append(
             {
-                "referencia": referencia,
-                "produto": produto,
-                "quantidade": quantidade,
+                "referencia": normalizar_referencia(
+
+                    resultado.group(
+                        "referencia"
+                    )
+                ),
+
+                "produto": resultado.group(
+
+                    "produto"
+
+                ).strip(),
+
+                "quantidade": float(
+
+                    resultado.group(
+                        "quantidade"
+                    ).replace(
+                        ",",
+                        ".",
+                    )
+                ),
             }
         )
 
-    # Segundo método caso o PDF tenha partido
-    # a tabela de forma diferente.
-    if not artigos:
-
-        texto_normalizado = re.sub(
-            r"[ \t]+",
-            " ",
-            texto,
-        )
-
-        padrao_global = re.compile(
-
-            r"(?:^|\n)\s*"
-
-            r"(?P<referencia>\d{2,6})\s+"
-
-            r"(?P<produto>[A-ZÀ-Ú0-9´'()+./ -]+?)\s+"
-
-            r"(?P<quantidade>\d+(?:[.,]\d+)?)\s+"
-
-            r"M\d+\s+Reg",
-
-            flags=(
-                re.IGNORECASE
-                | re.MULTILINE
-            ),
-        )
-
-        for resultado in padrao_global.finditer(
-            texto_normalizado
-        ):
-
-            artigos.append(
-                {
-                    "referencia": normalizar_referencia(
-                        resultado.group(
-                            "referencia"
-                        )
-                    ),
-
-                    "produto": resultado.group(
-                        "produto"
-                    ).strip(),
-
-                    "quantidade": float(
-                        resultado.group(
-                            "quantidade"
-                        ).replace(
-                            ",",
-                            ".",
-                        )
-                    ),
-                }
-            )
-
-    # Evita que uma linha seja reconhecida duas vezes.
     artigos_unicos = []
 
-    chaves_utilizadas = set()
+    encontrados = set()
 
     for artigo in artigos:
 
         chave = (
-            artigo["referencia"],
-            artigo["produto"],
-            artigo["quantidade"],
+
+            artigo[
+                "referencia"
+            ],
+
+            artigo[
+                "produto"
+            ],
+
+            artigo[
+                "quantidade"
+            ],
         )
 
-        if chave in chaves_utilizadas:
+        if chave in encontrados:
 
             continue
 
-        chaves_utilizadas.add(
+        encontrados.add(
             chave
         )
 
@@ -1199,6 +1041,7 @@ def extrair_linhas_fatura(texto):
         )
 
     return artigos_unicos
+
 
 def ler_fatura_pdf(
     ficheiro,
@@ -1209,52 +1052,33 @@ def ler_fatura_pdf(
         ficheiro
     )
 
-    if not paginas:
-
-        raise ValueError(
-            "O PDF não contém texto legível."
-        )
-
-    faturas_processadas = set()
-
     registos = []
 
-    mapa_fornecedores = (
-        mapa_referencia_fornecedor()
-    )
+    processadas = set()
 
     for texto in paginas:
 
-        cabecalho = (
-            extrair_cabecalho_fatura(
-                texto
-            )
+        cabecalho = extrair_cabecalho_fatura(
+            texto
         )
 
-        chave_fatura = cabecalho[
+        numero = cabecalho[
             "numero_fatura"
         ]
 
-        # Evita contar ORIGINAL e DUPLICADO.
-        if chave_fatura in faturas_processadas:
+        if numero in processadas:
+
             continue
 
-        faturas_processadas.add(
-            chave_fatura
+        processadas.add(
+            numero
         )
 
-        artigos = extrair_linhas_fatura(
+        artigos = extrair_artigos_fatura(
             texto
         )
 
         for artigo in artigos:
-
-            referencia = artigo[
-                "referencia"
-            ]
-
-           
-            )
 
             registos.append(
                 {
@@ -1262,7 +1086,9 @@ def ler_fatura_pdf(
 
                     "dia_saida": dia_saida,
 
-                    "referencia": referencia,
+                    "referencia": artigo[
+                        "referencia"
+                    ],
 
                     "produto": artigo[
                         "produto"
@@ -1272,7 +1098,12 @@ def ler_fatura_pdf(
                         "quantidade"
                     ],
 
-                    "fornecedor": fornecedor,
+                    "fornecedor": identificar_fornecedor(
+
+                        artigo[
+                            "referencia"
+                        ]
+                    ),
 
                     "ficheiro": ficheiro.name,
                 }
@@ -1290,32 +1121,19 @@ def ler_fatura_pdf(
 
 
 def adicionar_fatura(
-    nova_fatura,
+    nova_fatura
 ):
-
-    existentes = (
-        st.session_state.faturas.copy()
-    )
-
-    if existentes.empty:
-
-        st.session_state.faturas = (
-            nova_fatura.copy()
-        )
-
-        return len(nova_fatura), 0
 
     combinado = pd.concat(
 
         [
-            existentes,
+            st.session_state.faturas,
+
             nova_fatura,
         ],
 
         ignore_index=True,
     )
-
-    antes = len(combinado)
 
     combinado = combinado.drop_duplicates(
 
@@ -1324,21 +1142,7 @@ def adicionar_fatura(
             "referencia",
             "quantidade",
             "dia_saida",
-        ],
-
-        keep="first",
-    )
-
-    duplicados = (
-
-        antes
-        - len(combinado)
-    )
-
-    adicionados = (
-
-        len(combinado)
-        - len(existentes)
+        ]
     )
 
     st.session_state.faturas = (
@@ -1348,48 +1152,13 @@ def adicionar_fatura(
         )
     )
 
-    return adicionados, duplicados
-
 
 # =========================================================
-# EXPORTAR EXCEL
+# ENCOMENDAS
 # =========================================================
 
-def converter_para_excel(
-    dados,
-    folha="Dados",
-):
-
-    memoria = io.BytesIO()
-
-    with pd.ExcelWriter(
-
-        memoria,
-
-        engine="openpyxl",
-
-    ) as writer:
-
-        dados.to_excel(
-
-            writer,
-
-            index=False,
-
-            sheet_name=folha[:31],
-        )
-
-    memoria.seek(0)
-
-    return memoria.getvalue()
-
-
-# =========================================================
-# CÁLCULO DE ENCOMENDAS
-# =========================================================
-
-def calcular_encomendas(
-    fornecedor,
+def calcular_encomenda(
+    fornecedor
 ):
 
     atual = obter_inventario(
@@ -1432,8 +1201,7 @@ def calcular_encomendas(
 
             None,
 
-            "A listagem precisa das colunas "
-            "Saídas e Stock Final.",
+            "A listagem precisa das colunas Saídas e Stock Final.",
         )
 
     chave = (
@@ -1518,15 +1286,9 @@ def calcular_encomendas(
 
     resultado[
         "saidas_anterior"
-    ] = pd.to_numeric(
-
-        resultado[
-            "saidas_anterior"
-        ],
-
-        errors="coerce",
-
-    ).fillna(0)
+    ] = resultado[
+        "saidas_anterior"
+    ].fillna(0)
 
     if anterior is None:
 
@@ -1617,100 +1379,13 @@ def calcular_encomendas(
         )
     )
 
-    resultado[
-        "variacao_pct"
-    ] = resultado.apply(
-
-        lambda linha: (
-
-            (
-
-                (
-                    linha[
-                        "saidas_atual"
-                    ]
-
-                    - linha[
-                        "saidas_anterior"
-                    ]
-                )
-
-                / linha[
-                    "saidas_anterior"
-                ]
-            ) * 100
-
-            if linha[
-                "saidas_anterior"
-            ] != 0
-
-            else (
-
-                100
-
-                if linha[
-                    "saidas_atual"
-                ] > 0
-
-                else 0
-            )
-        ),
-
-        axis=1,
-    )
-
-    resultado[
-        "motivo"
-    ] = resultado.apply(
-
-        lambda linha: (
-
-            "Vendas a subir e stock insuficiente"
-
-            if (
-
-                linha[
-                    "sugestao"
-                ] > 0
-
-                and linha[
-                    "variacao_pct"
-                ] > 10
-            )
-
-            else "Stock insuficiente"
-
-            if linha[
-                "sugestao"
-            ] > 0
-
-            else "Stock suficiente"
-        ),
-
-        axis=1,
-    )
-
-    resultado[
-        "fornecedor"
-    ] = fornecedor
-
-    resultado = resultado.sort_values(
-
-        [
-            "sugestao",
-            "saidas_atual",
-        ],
-
-        ascending=[
-            False,
-            False,
-        ],
-    )
-
     return (
 
-        resultado.reset_index(
-            drop=True
+        resultado.sort_values(
+
+            "sugestao",
+
+            ascending=False,
         ),
 
         None,
@@ -1724,21 +1399,11 @@ def calcular_encomendas(
 with st.sidebar:
 
     st.markdown(
-
-        '<div class="inviora-brand">'
-        'INVIORA'
-        '</div>',
-
-        unsafe_allow_html=True,
+        "## INVIORA"
     )
 
-    st.markdown(
-
-        '<div class="inviora-tagline">'
-        'Transformar dados em decisões.'
-        '</div>',
-
-        unsafe_allow_html=True,
+    st.caption(
+        "Transformar dados em decisões."
     )
 
     pagina = st.radio(
@@ -1789,6 +1454,7 @@ with st.sidebar:
         st.caption(
 
             f"{atual} {fornecedor} atual · "
+
             f"{anterior} anterior"
         )
 
@@ -1808,7 +1474,7 @@ with st.sidebar:
     )
 
     st.caption(
-        "Inviora v0.3.0"
+        "Inviora v0.4.1"
     )
 
 
@@ -1818,9 +1484,11 @@ with st.sidebar:
 
 if pagina == "🏠 Dashboard":
 
-    st.title("Dashboard")
+    st.title(
+        "Dashboard"
+    )
 
-    fornecedor_filtro = st.selectbox(
+    fornecedor = st.selectbox(
 
         "Fornecedor",
 
@@ -1830,9 +1498,9 @@ if pagina == "🏠 Dashboard":
         ],
     )
 
-    if fornecedor_filtro == "Todos":
+    if fornecedor == "Todos":
 
-        atual = inventarios_carregados(
+        atual = juntar_inventarios(
             "Atual"
         )
 
@@ -1840,20 +1508,10 @@ if pagina == "🏠 Dashboard":
 
         atual = obter_inventario(
 
-            fornecedor_filtro,
+            fornecedor,
 
             "Atual",
         )
-
-        if atual is not None:
-
-            atual = garantir_produto(
-                atual
-            )
-
-            atual[
-                "fornecedor"
-            ] = fornecedor_filtro
 
     if atual is None:
 
@@ -1863,13 +1521,23 @@ if pagina == "🏠 Dashboard":
 
         st.stop()
 
+    atual = garantir_produto(
+        atual
+    )
+
+    if fornecedor != "Todos":
+
+        atual[
+            "fornecedor"
+        ] = fornecedor
+
     faturas = (
         st.session_state.faturas.copy()
     )
 
     if (
 
-        fornecedor_filtro != "Todos"
+        fornecedor != "Todos"
 
         and not faturas.empty
     ):
@@ -1878,24 +1546,8 @@ if pagina == "🏠 Dashboard":
 
             faturas[
                 "fornecedor"
-            ] == fornecedor_filtro
+            ] == fornecedor
         ]
-
-    total_produtos = len(
-        atual
-    )
-
-    total_saidas = (
-
-        atual[
-            "saidas"
-        ].sum()
-
-        if "saidas"
-        in atual.columns
-
-        else 0
-    )
 
     stock_phc = (
 
@@ -1909,7 +1561,19 @@ if pagina == "🏠 Dashboard":
         else 0
     )
 
-    faturado_pendente = (
+    saidas = (
+
+        atual[
+            "saidas"
+        ].sum()
+
+        if "saidas"
+        in atual.columns
+
+        else 0
+    )
+
+    faturado = (
 
         faturas[
             "quantidade"
@@ -1918,12 +1582,6 @@ if pagina == "🏠 Dashboard":
         if not faturas.empty
 
         else 0
-    )
-
-    stock_fisico = (
-
-        stock_phc
-        + faturado_pendente
     )
 
     criticos = (
@@ -1949,15 +1607,13 @@ if pagina == "🏠 Dashboard":
 
     coluna1.metric(
         "Produtos",
-        formatar_numero(
-            total_produtos
-        ),
+        len(atual),
     )
 
     coluna2.metric(
         "Saídas",
         formatar_numero(
-            total_saidas,
+            saidas,
             1,
         ),
     )
@@ -1973,183 +1629,83 @@ if pagina == "🏠 Dashboard":
     coluna4.metric(
         "Faturado no armazém",
         formatar_numero(
-            faturado_pendente,
+            faturado,
             1,
         ),
     )
 
     coluna5.metric(
-        "Stock físico estimado",
+        "Stock físico",
         formatar_numero(
-            stock_fisico,
+            stock_phc + faturado,
             1,
         ),
     )
 
-    coluna1, coluna2, coluna3 = st.columns(
-        3
-    )
+    if "saidas" in atual.columns:
 
-    quarta = (
+        ranking = (
 
-        faturas.loc[
+            atual.groupby(
 
-            faturas[
-                "dia_saida"
-            ] == "Quarta-feira",
+                "produto",
 
-            "quantidade",
+                as_index=False,
 
-        ].sum()
-
-        if not faturas.empty
-
-        else 0
-    )
-
-    quinta = (
-
-        faturas.loc[
-
-            faturas[
-                "dia_saida"
-            ] == "Quinta-feira",
-
-            "quantidade",
-
-        ].sum()
-
-        if not faturas.empty
-
-        else 0
-    )
-
-    coluna1.metric(
-        "Sai quarta",
-        formatar_numero(
-            quarta,
-            1,
-        ),
-    )
-
-    coluna2.metric(
-        "Sai quinta",
-        formatar_numero(
-            quinta,
-            1,
-        ),
-    )
-
-    coluna3.metric(
-        "Stock ≤ 0",
-        formatar_numero(
-            criticos
-        ),
-    )
-
-    esquerda, direita = st.columns(
-        [
-            1.2,
-            1,
-        ]
-    )
-
-    with esquerda:
-
-        st.subheader(
-            "Produtos com mais saídas"
-        )
-
-        if "saidas" in atual.columns:
-
-            ranking = (
-
-                atual.groupby(
-
-                    "produto",
-
-                    as_index=False,
-
-                )[
-                    "saidas"
-                ]
-
-                .sum()
-
-                .nlargest(
-                    12,
-                    "saidas",
-                )
-
-                .sort_values(
-                    "saidas"
-                )
-            )
-
-            grafico = px.bar(
-
-                ranking,
-
-                x="saidas",
-
-                y="produto",
-
-                orientation="h",
-            )
-
-            st.plotly_chart(
-
-                grafico,
-
-                use_container_width=True,
-            )
-
-    with direita:
-
-        st.subheader(
-            "Atenção imediata"
-        )
-
-        if "stock_final" in atual.columns:
-
-            colunas = [
-
-                coluna
-
-                for coluna in [
-
-                    "fornecedor",
-                    "referencia",
-                    "produto",
-                    "stock_final",
-                    "saidas",
-
-                ]
-
-                if coluna
-                in atual.columns
+            )[
+                "saidas"
             ]
 
-            alerta = atual.loc[
+            .sum()
+
+            .nlargest(
+                12,
+                "saidas",
+            )
+
+            .sort_values(
+                "saidas"
+            )
+        )
+
+        grafico = px.bar(
+
+            ranking,
+
+            x="saidas",
+
+            y="produto",
+
+            orientation="h",
+        )
+
+        st.plotly_chart(
+
+            grafico,
+
+            use_container_width=True,
+        )
+
+    if "stock_final" in atual.columns:
+
+        st.subheader(
+            f"Produtos críticos: {criticos}"
+        )
+
+        st.dataframe(
+
+            atual[
 
                 atual[
                     "stock_final"
-                ] <= 0,
+                ] <= 0
 
-                colunas,
+            ].head(20),
 
-            ].sort_values(
-                "stock_final"
-            )
+            use_container_width=True,
 
-            st.dataframe(
-
-                alerta.head(20),
-
-                use_container_width=True,
-
-                hide_index=True,
-            )
+            hide_index=True,
+        )
 
 
 # =========================================================
@@ -2188,7 +1744,6 @@ elif pagina == "📥 Importar inventário":
         ],
 
         key=(
-            f"upload_"
             f"{fornecedor}_"
             f"{periodo}"
         ),
@@ -2199,6 +1754,7 @@ elif pagina == "📥 Importar inventário":
         try:
 
             dados, cabecalho = (
+
                 ler_ficheiro_tabular(
                     ficheiro
                 )
@@ -2206,37 +1762,29 @@ elif pagina == "📥 Importar inventário":
 
             st.session_state.inventarios[
                 fornecedor
-            ][
-                periodo
-            ] = dados
+            ][periodo] = dados
 
             st.session_state.nomes_ficheiros[
                 fornecedor
-            ][
-                periodo
-            ] = ficheiro.name
+            ][periodo] = ficheiro.name
 
             st.success(
 
-                f"{fornecedor} {periodo.lower()} carregado. "
+                f"{fornecedor} {periodo.lower()} carregado: "
+
                 f"{len(dados)} linhas."
             )
 
             st.caption(
 
-                "Colunas reconhecidas: "
+                f"Cabeçalho identificado na linha "
 
-                + ", ".join(
-
-                    dados.columns.astype(
-                        str
-                    )
-                )
+                f"{cabecalho + 1}."
             )
 
             st.dataframe(
 
-                dados.head(25),
+                dados.head(30),
 
                 use_container_width=True,
 
@@ -2248,56 +1796,13 @@ elif pagina == "📥 Importar inventário":
             st.error(
 
                 f"Não consegui ler o ficheiro: "
+
                 f"{erro}"
             )
 
-    estado = []
-
-    for nome_fornecedor in FORNECEDORES:
-
-        for nome_periodo in PERIODOS:
-
-            dados = obter_inventario(
-
-                nome_fornecedor,
-
-                nome_periodo,
-            )
-
-            estado.append(
-                {
-                    "Fornecedor": nome_fornecedor,
-                    "Período": nome_periodo,
-                    "Ficheiro": (
-                        st.session_state.nomes_ficheiros[
-                            nome_fornecedor
-                        ][
-                            nome_periodo
-                        ]
-                        or "Não carregado"
-                    ),
-                    "Linhas": (
-                        len(dados)
-                        if dados is not None
-                        else 0
-                    ),
-                }
-            )
-
-    st.dataframe(
-
-        pd.DataFrame(
-            estado
-        ),
-
-        use_container_width=True,
-
-        hide_index=True,
-    )
-
 
 # =========================================================
-# FATURAS PENDENTES
+# FATURAS
 # =========================================================
 
 elif pagina == "🧾 Faturas pendentes":
@@ -2307,9 +1812,12 @@ elif pagina == "🧾 Faturas pendentes":
     )
 
     st.info(
-        "O PHC já retirou estas quantidades do stock. "
-        "A Inviora apenas soma as faturas para calcular "
-        "o stock físico e preparar as saídas."
+
+        "O PHC já retirou estas quantidades. "
+
+        "A Inviora utiliza-as para calcular o stock físico "
+
+        "e preparar as saídas."
     )
 
     dia_saida = st.radio(
@@ -2321,7 +1829,7 @@ elif pagina == "🧾 Faturas pendentes":
         horizontal=True,
     )
 
-    faturas_pdf = st.file_uploader(
+    ficheiros = st.file_uploader(
 
         "Carregar faturas PDF",
 
@@ -2334,63 +1842,48 @@ elif pagina == "🧾 Faturas pendentes":
 
     if (
 
-        faturas_pdf
+        ficheiros
 
         and st.button(
+
             "Ler e adicionar faturas",
+
             type="primary",
         )
     ):
 
-        total_adicionados = 0
-
-        total_duplicados = 0
-
-        for fatura_pdf in faturas_pdf:
+        for ficheiro in ficheiros:
 
             try:
 
                 nova_fatura = ler_fatura_pdf(
 
-                    fatura_pdf,
+                    ficheiro,
 
                     dia_saida,
                 )
 
-                adicionados, duplicados = (
-                    adicionar_fatura(
-                        nova_fatura
-                    )
+                adicionar_fatura(
+                    nova_fatura
                 )
 
-                total_adicionados += adicionados
+                st.success(
 
-                total_duplicados += duplicados
+                    f"{ficheiro.name} adicionada."
+                )
 
             except Exception as erro:
 
                 st.error(
 
-                    f"{fatura_pdf.name}: "
+                    f"{ficheiro.name}: "
+
                     f"{erro}"
                 )
 
-        if total_adicionados:
-
-            st.success(
-
-                f"{total_adicionados} linhas adicionadas."
-            )
-
-        if total_duplicados:
-
-            st.warning(
-
-                f"{total_duplicados} duplicados ignorados."
-            )
-
     faturas = (
-        st.session_state.faturas
+
+        st.session_state.faturas.copy()
     )
 
     if faturas.empty:
@@ -2401,198 +1894,97 @@ elif pagina == "🧾 Faturas pendentes":
 
         st.stop()
 
-    coluna1, coluna2, coluna3 = st.columns(
-        3
+    editada = st.data_editor(
+
+        faturas,
+
+        use_container_width=True,
+
+        hide_index=True,
+
+        column_config={
+
+            "fornecedor":
+
+                st.column_config.SelectboxColumn(
+
+                    "Fornecedor",
+
+                    options=[
+                        "Logista",
+                        "Tabaqueira",
+                        "Não identificado",
+                    ],
+                )
+        },
     )
 
-    coluna1.metric(
+    if st.button(
+        "Guardar correções"
+    ):
 
-        "Faturas",
+        st.session_state.faturas = (
 
-        faturas[
-            "numero_fatura"
-        ].nunique(),
-    )
+            editada.copy()
+        )
 
-    coluna2.metric(
+        st.success(
+            "Correções guardadas."
+        )
 
-        "Unidades quarta",
+    resumo = (
 
-        formatar_numero(
+        editada.groupby(
 
-            faturas.loc[
+            [
+                "dia_saida",
+                "fornecedor",
+                "referencia",
+                "produto",
+            ],
 
-                faturas[
-                    "dia_saida"
-                ] == "Quarta-feira",
+            as_index=False,
 
-                "quantidade",
-
-            ].sum(),
-
-            1,
-        ),
-    )
-
-    coluna3.metric(
-
-        "Unidades quinta",
-
-        formatar_numero(
-
-            faturas.loc[
-
-                faturas[
-                    "dia_saida"
-                ] == "Quinta-feira",
-
-                "quantidade",
-
-            ].sum(),
-
-            1,
-        ),
-    )
-
-    aba_quarta, aba_quinta, aba_todas = st.tabs(
-
-        [
-            "Quarta-feira",
-            "Quinta-feira",
-            "Todas",
+        )[
+            "quantidade"
         ]
+
+        .sum()
     )
 
-    configuracao_abas = [
+    st.subheader(
+        "Resumo para preparação"
+    )
 
-        (
-            aba_quarta,
-            "Quarta-feira",
+    st.dataframe(
+
+        resumo,
+
+        use_container_width=True,
+
+        hide_index=True,
+    )
+
+    st.download_button(
+
+        "⬇️ Exportar preparação",
+
+        data=converter_para_excel(
+
+            resumo,
+
+            "Preparacao",
         ),
 
-        (
-            aba_quinta,
-            "Quinta-feira",
+        file_name=(
+
+            f"preparacao_"
+
+            f"{date.today().isoformat()}"
+
+            f".xlsx"
         ),
-
-        (
-            aba_todas,
-            None,
-        ),
-    ]
-
-    for aba, dia in configuracao_abas:
-
-        with aba:
-
-            tabela = (
-
-                faturas
-
-                if dia is None
-
-                else faturas[
-
-                    faturas[
-                        "dia_saida"
-                    ] == dia
-                ]
-            )
-
-            st.dataframe(
-
-                tabela,
-
-                use_container_width=True,
-
-                hide_index=True,
-            )
-
-            if not tabela.empty:
-
-                resumo = (
-
-                    tabela.groupby(
-
-                        [
-                            "fornecedor",
-                            "referencia",
-                            "produto",
-                        ],
-
-                        as_index=False,
-
-                    )[
-                        "quantidade"
-                    ]
-
-                    .sum()
-
-                    .sort_values(
-
-                        "quantidade",
-
-                        ascending=False,
-                    )
-                )
-
-                st.subheader(
-                    "Resumo para preparação"
-                )
-
-                st.dataframe(
-
-                    resumo,
-
-                    use_container_width=True,
-
-                    hide_index=True,
-                )
-
-                nome_dia = (
-
-                    "todas"
-
-                    if dia is None
-
-                    else normalizar_texto(
-                        dia
-                    ).replace(
-                        " ",
-                        "_",
-                    )
-                )
-
-                st.download_button(
-
-                    "⬇️ Exportar preparação",
-
-                    data=converter_para_excel(
-
-                        resumo,
-
-                        "Preparacao",
-                    ),
-
-                    file_name=(
-
-                        f"faturas_"
-                        f"{nome_dia}_"
-                        f"{date.today().isoformat()}"
-                        f".xlsx"
-                    ),
-
-                    mime=(
-
-                        "application/vnd.openxmlformats-"
-                        "officedocument.spreadsheetml.sheet"
-                    ),
-
-                    key=(
-                        f"download_"
-                        f"{nome_dia}"
-                    ),
-                )
+    )
 
 
 # =========================================================
@@ -2612,7 +2004,7 @@ elif pagina == "📦 Encomendas":
         FORNECEDORES,
     )
 
-    resultado, erro = calcular_encomendas(
+    resultado, erro = calcular_encomenda(
         fornecedor
     )
 
@@ -2622,17 +2014,7 @@ elif pagina == "📦 Encomendas":
 
         st.stop()
 
-    if obter_inventario(
-        fornecedor,
-        "Anterior",
-    ) is None:
-
-        st.warning(
-            "Ainda não carregaste o período anterior. "
-            "A sugestão está a usar apenas o período atual."
-        )
-
-    apenas_encomendar = st.toggle(
+    mostrar_apenas = st.toggle(
 
         "Mostrar apenas produtos a encomendar",
 
@@ -2641,7 +2023,7 @@ elif pagina == "📦 Encomendas":
 
     tabela = resultado.copy()
 
-    if apenas_encomendar:
+    if mostrar_apenas:
 
         tabela = tabela[
 
@@ -2694,34 +2076,9 @@ elif pagina == "📦 Encomendas":
         ),
     )
 
-    colunas = [
-
-        coluna
-
-        for coluna in [
-
-            "referencia",
-            "produto",
-            "saidas_anterior",
-            "saidas_atual",
-            "variacao_pct",
-            "stock_phc",
-            "procura_base",
-            "stock_alvo",
-            "sugestao",
-            "motivo",
-
-        ]
-
-        if coluna
-        in tabela.columns
-    ]
-
     st.dataframe(
 
-        tabela[
-            colunas
-        ],
+        tabela,
 
         use_container_width=True,
 
@@ -2734,9 +2091,7 @@ elif pagina == "📦 Encomendas":
 
         data=converter_para_excel(
 
-            tabela[
-                colunas
-            ],
+            tabela,
 
             f"Pedido {fornecedor}",
         ),
@@ -2744,15 +2099,12 @@ elif pagina == "📦 Encomendas":
         file_name=(
 
             f"encomenda_"
+
             f"{fornecedor}_"
+
             f"{date.today().isoformat()}"
+
             f".xlsx"
-        ),
-
-        mime=(
-
-            "application/vnd.openxmlformats-"
-            "officedocument.spreadsheetml.sheet"
         ),
     )
 
@@ -2763,7 +2115,9 @@ elif pagina == "📦 Encomendas":
 
 elif pagina == "📈 Vendas":
 
-    st.title("Vendas")
+    st.title(
+        "Vendas"
+    )
 
     fornecedor = st.selectbox(
 
@@ -2777,7 +2131,7 @@ elif pagina == "📈 Vendas":
 
     if fornecedor == "Todos":
 
-        atual = inventarios_carregados(
+        atual = juntar_inventarios(
             "Atual"
         )
 
@@ -2840,7 +2194,9 @@ elif pagina == "📈 Vendas":
 
 elif pagina == "📋 Produtos":
 
-    st.title("Produtos")
+    st.title(
+        "Produtos"
+    )
 
     fornecedor = st.selectbox(
 
@@ -2854,7 +2210,7 @@ elif pagina == "📋 Produtos":
 
     if fornecedor == "Todos":
 
-        atual = inventarios_carregados(
+        atual = juntar_inventarios(
             "Atual"
         )
 
@@ -2867,23 +2223,17 @@ elif pagina == "📋 Produtos":
             "Atual",
         )
 
-        if atual is not None:
-
-            atual = garantir_produto(
-                atual
-            )
-
-            atual[
-                "fornecedor"
-            ] = fornecedor
-
     if atual is None:
 
         st.info(
-            "Não existem listagens carregadas."
+            "Não existem dados carregados."
         )
 
         st.stop()
+
+    atual = garantir_produto(
+        atual
+    )
 
     pesquisa = st.text_input(
 
@@ -2944,11 +2294,6 @@ elif pagina == "📋 Produtos":
             mascara
         ]
 
-    st.caption(
-
-        f"{len(tabela)} produtos encontrados"
-    )
-
     st.dataframe(
 
         tabela,
@@ -2965,7 +2310,9 @@ elif pagina == "📋 Produtos":
 
 else:
 
-    st.title("Definições")
+    st.title(
+        "Definições"
+    )
 
     st.session_state.cobertura = st.number_input(
 
@@ -3012,31 +2359,9 @@ else:
         step=1,
     )
 
-    st.subheader(
-        "Regra de encomenda"
-    )
-
-    st.code(
-
-        "Procura estimada = "
-        "65% × saídas atuais + "
-        "35% × saídas anteriores\n"
-
-        "Sem período anterior: "
-        "procura estimada = saídas atuais\n"
-
-        "Stock alvo = "
-        "procura estimada × cobertura × "
-        "(1 + margem de segurança)\n"
-
-        "Sugestão = "
-        "máximo entre 0 e "
-        "(stock alvo - stock PHC)",
-
-        language="text",
-    )
-
     st.warning(
-        "Esta regra ainda é experimental. "
-        "Não faças encomendas reais sem validar os resultados."
+
+        "A fórmula de encomenda ainda é experimental. "
+
+        "Valida sempre os resultados antes de comprar."
     )
