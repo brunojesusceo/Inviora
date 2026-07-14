@@ -62,7 +62,6 @@ st.markdown(
 
 
 FORNECEDORES = [
-    "SDT",
     "Logista",
     "Tabaqueira",
 ]
@@ -849,40 +848,65 @@ def inventarios_carregados(
     )
 
 
-def mapa_referencia_fornecedor():
+def referencias_por_fornecedor():
 
-    mapa = {}
+    referencias = {
+        "Logista": set(),
+        "Tabaqueira": set(),
+    }
 
     for fornecedor in FORNECEDORES:
 
         for periodo in PERIODOS:
 
             dados = obter_inventario(
-
                 fornecedor,
-
                 periodo,
             )
 
             if (
-
                 dados is not None
-
-                and "referencia"
-                in dados.columns
+                and "referencia" in dados.columns
             ):
 
-                for referencia in dados[
-                    "referencia"
-                ].dropna():
+                lista_referencias = (
+                    dados["referencia"]
+                    .dropna()
+                    .map(normalizar_referencia)
+                    .tolist()
+                )
 
-                    mapa[
-                        normalizar_referencia(
-                            referencia
-                        )
-                    ] = fornecedor
+                referencias[
+                    fornecedor
+                ].update(
+                    lista_referencias
+                )
 
-    return mapa
+    return referencias
+
+
+def identificar_fornecedor(
+    referencia,
+):
+
+    referencia = normalizar_referencia(
+        referencia
+    )
+
+    referencias = referencias_por_fornecedor()
+
+    # Os produtos da Logista são exclusivos.
+    if referencia in referencias["Logista"]:
+
+        return "Logista"
+
+    # Os restantes produtos reconhecidos
+    # pertencem à Tabaqueira.
+    if referencia in referencias["Tabaqueira"]:
+
+        return "Tabaqueira"
+
+    return "Não identificado"
 
 
 # =========================================================
@@ -892,7 +916,6 @@ def mapa_referencia_fornecedor():
 def extrair_texto_pdf(ficheiro):
 
     leitor = PdfReader(
-
         io.BytesIO(
             ficheiro.getvalue()
         )
@@ -902,11 +925,19 @@ def extrair_texto_pdf(ficheiro):
 
     for pagina in leitor.pages:
 
-        textos.append(
+        texto = ""
 
-            pagina.extract_text()
-            or ""
-        )
+        try:
+
+            texto = pagina.extract_text(
+                extraction_mode="layout"
+            ) or ""
+
+        except Exception:
+
+            texto = pagina.extract_text() or ""
+
+        textos.append(texto)
 
     return textos
 
@@ -1019,80 +1050,155 @@ def extrair_linhas_fatura(texto):
 
     artigos = []
 
-    padrao = re.compile(
+    # Normaliza espaços, mas preserva as linhas.
+    linhas = [
 
-        r"^\s*"
+        re.sub(
+            r"\s+",
+            " ",
+            linha.strip(),
+        )
 
-        r"(?P<referencia>\d+)\s+"
+        for linha in texto.splitlines()
+
+        if linha.strip()
+    ]
+
+    padrao_principal = re.compile(
+
+        r"^(?P<referencia>\d+)\s+"
 
         r"(?P<produto>.+?)\s+"
 
         r"(?P<quantidade>\d+(?:[.,]\d+)?)\s+"
 
-        r"(?:M\d+|[A-Z]\d+)\s+"
+        r"M\d+\s+"
 
-        r"(?:Reg|Isen|Ise|Normal)?",
+        r"Reg\b",
 
         flags=re.IGNORECASE,
     )
 
-    for linha in texto.splitlines():
+    for linha in linhas:
 
-        correspondencia = padrao.search(
+        resultado = padrao_principal.search(
             linha
         )
 
-        if not correspondencia:
+        if resultado is None:
+
             continue
 
-        referencia = (
+        referencia = normalizar_referencia(
 
-            correspondencia.group(
+            resultado.group(
                 "referencia"
             )
         )
 
-        produto = (
+        produto = resultado.group(
+            "produto"
+        ).strip()
 
-            correspondencia.group(
-                "produto"
-            ).strip()
-        )
+        quantidade = float(
 
-        quantidade_texto = (
-
-            correspondencia.group(
+            resultado.group(
                 "quantidade"
-            )
-
-            .replace(
+            ).replace(
                 ",",
                 ".",
             )
         )
 
-        try:
-
-            quantidade = float(
-                quantidade_texto
-            )
-
-        except ValueError:
-
-            continue
-
         artigos.append(
             {
-                "referencia": normalizar_referencia(
-                    referencia
-                ),
+                "referencia": referencia,
                 "produto": produto,
                 "quantidade": quantidade,
             }
         )
 
-    return artigos
+    # Segundo método caso o PDF tenha partido
+    # a tabela de forma diferente.
+    if not artigos:
 
+        texto_normalizado = re.sub(
+            r"[ \t]+",
+            " ",
+            texto,
+        )
+
+        padrao_global = re.compile(
+
+            r"(?:^|\n)\s*"
+
+            r"(?P<referencia>\d{2,6})\s+"
+
+            r"(?P<produto>[A-ZÀ-Ú0-9´'()+./ -]+?)\s+"
+
+            r"(?P<quantidade>\d+(?:[.,]\d+)?)\s+"
+
+            r"M\d+\s+Reg",
+
+            flags=(
+                re.IGNORECASE
+                | re.MULTILINE
+            ),
+        )
+
+        for resultado in padrao_global.finditer(
+            texto_normalizado
+        ):
+
+            artigos.append(
+                {
+                    "referencia": normalizar_referencia(
+                        resultado.group(
+                            "referencia"
+                        )
+                    ),
+
+                    "produto": resultado.group(
+                        "produto"
+                    ).strip(),
+
+                    "quantidade": float(
+                        resultado.group(
+                            "quantidade"
+                        ).replace(
+                            ",",
+                            ".",
+                        )
+                    ),
+                }
+            )
+
+    # Evita que uma linha seja reconhecida duas vezes.
+    artigos_unicos = []
+
+    chaves_utilizadas = set()
+
+    for artigo in artigos:
+
+        chave = (
+            artigo["referencia"],
+            artigo["produto"],
+            artigo["quantidade"],
+        )
+
+        if chave in chaves_utilizadas:
+
+            continue
+
+        chaves_utilizadas.add(
+            chave
+        )
+
+        artigos_unicos.append(
+            artigo
+        )
+
+    return artigos_unicos
 
 def ler_fatura_pdf(
     ficheiro,
@@ -1147,11 +1253,7 @@ def ler_fatura_pdf(
                 "referencia"
             ]
 
-            fornecedor = (
-                mapa_fornecedores.get(
-                    referencia,
-                    "Não identificado",
-                )
+           
             )
 
             registos.append(
