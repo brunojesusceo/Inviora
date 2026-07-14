@@ -7,11 +7,13 @@ from datetime import date
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from pypdf import PdfReader
 
 
 # =========================================================
-# INVIORA — Smart Inventory Intelligence
-# Versão 0.2.0
+# INVIORA
+# Smart Inventory Intelligence
+# Versão 0.3.0
 # =========================================================
 
 st.set_page_config(
@@ -25,13 +27,14 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+
         .block-container {
-            padding-top: 1.5rem;
+            padding-top: 1.4rem;
             padding-bottom: 2rem;
         }
 
         [data-testid="stSidebar"] {
-            border-right: 1px solid rgba(128,128,128,0.20);
+            border-right: 1px solid rgba(128,128,128,0.18);
         }
 
         .inviora-brand {
@@ -41,7 +44,7 @@ st.markdown(
         }
 
         .inviora-tagline {
-            opacity: 0.70;
+            opacity: 0.72;
             margin-top: -0.4rem;
             margin-bottom: 1.4rem;
         }
@@ -51,43 +54,110 @@ st.markdown(
             padding: 0.8rem 1rem;
             border-radius: 0.8rem;
         }
+
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 
-# =========================================================
-# MEMÓRIA DA APLICAÇÃO
-# =========================================================
+FORNECEDORES = [
+    "SDT",
+    "Logista",
+    "Tabaqueira",
+]
 
-VALORES_INICIAIS = {
-    "atual": None,
-    "anterior": None,
-    "historico": None,
-    "cobertura": 1.0,
-    "seguranca": 15,
-    "multiplo": 1,
-}
+PERIODOS = [
+    "Atual",
+    "Anterior",
+]
 
-
-for chave, valor in VALORES_INICIAIS.items():
-    if chave not in st.session_state:
-        st.session_state[chave] = valor
+DIAS_SAIDA = [
+    "Quarta-feira",
+    "Quinta-feira",
+]
 
 
 # =========================================================
-# LEITURA E TRATAMENTO DOS FICHEIROS
+# MEMÓRIA
+# =========================================================
+
+if "inventarios" not in st.session_state:
+
+    st.session_state.inventarios = {
+
+        fornecedor: {
+            "Atual": None,
+            "Anterior": None,
+        }
+
+        for fornecedor in FORNECEDORES
+    }
+
+
+if "nomes_ficheiros" not in st.session_state:
+
+    st.session_state.nomes_ficheiros = {
+
+        fornecedor: {
+            "Atual": None,
+            "Anterior": None,
+        }
+
+        for fornecedor in FORNECEDORES
+    }
+
+
+if "faturas" not in st.session_state:
+
+    st.session_state.faturas = pd.DataFrame(
+
+        columns=[
+            "numero_fatura",
+            "cliente",
+            "vendedor",
+            "data_fatura",
+            "dia_saida",
+            "referencia",
+            "produto",
+            "quantidade",
+            "fornecedor",
+            "ficheiro",
+        ]
+    )
+
+
+if "cobertura" not in st.session_state:
+    st.session_state.cobertura = 1.0
+
+
+if "seguranca" not in st.session_state:
+    st.session_state.seguranca = 15
+
+
+if "multiplo" not in st.session_state:
+    st.session_state.multiplo = 1
+
+
+# =========================================================
+# FUNÇÕES DE TEXTO
 # =========================================================
 
 def normalizar_texto(valor):
+
     texto = "" if valor is None else str(valor)
 
-    texto = unicodedata.normalize("NFKD", texto)
+    texto = unicodedata.normalize(
+        "NFKD",
+        texto,
+    )
 
     texto = "".join(
+
         letra
+
         for letra in texto
+
         if not unicodedata.combining(letra)
     )
 
@@ -106,7 +176,51 @@ def normalizar_texto(valor):
     ).strip()
 
 
+def normalizar_referencia(valor):
+
+    texto = str(valor).strip()
+
+    if texto.endswith(".0"):
+        texto = texto[:-2]
+
+    return texto
+
+
+def formatar_numero(valor, casas=0):
+
+    try:
+
+        return (
+
+            f"{float(valor):,.{casas}f}"
+
+            .replace(
+                ",",
+                "X",
+            )
+
+            .replace(
+                ".",
+                ",",
+            )
+
+            .replace(
+                "X",
+                ".",
+            )
+        )
+
+    except Exception:
+
+        return "0"
+
+
+# =========================================================
+# IDENTIFICAÇÃO DAS COLUNAS
+# =========================================================
+
 ALIASES = {
+
     "referencia": [
         "referencia",
         "ref",
@@ -182,56 +296,88 @@ MAPA_COLUNAS = {}
 
 
 for nome_final, alternativas in ALIASES.items():
+
     for alternativa in alternativas:
+
         MAPA_COLUNAS[
             normalizar_texto(alternativa)
         ] = nome_final
 
 
 def identificar_coluna(nome):
+
     nome_normalizado = normalizar_texto(nome)
 
     if nome_normalizado in MAPA_COLUNAS:
-        return MAPA_COLUNAS[nome_normalizado]
+
+        return MAPA_COLUNAS[
+            nome_normalizado
+        ]
 
     for alternativa, nome_final in sorted(
+
         MAPA_COLUNAS.items(),
+
         key=lambda item: len(item[0]),
+
         reverse=True,
     ):
 
         if len(alternativa) >= 5:
 
             if (
-                nome_normalizado.startswith(alternativa)
-                or nome_normalizado.endswith(alternativa)
+
+                nome_normalizado.startswith(
+                    alternativa
+                )
+
+                or nome_normalizado.endswith(
+                    alternativa
+                )
             ):
+
                 return nome_final
 
     return None
 
 
 def pontuar_cabecalho(valores):
-    colunas_encontradas = set()
+
+    encontrados = set()
 
     for valor in valores:
-        coluna = identificar_coluna(valor)
+
+        coluna = identificar_coluna(
+            valor
+        )
 
         if coluna:
-            colunas_encontradas.add(coluna)
+            encontrados.add(coluna)
 
-    return len(colunas_encontradas)
+    return len(encontrados)
 
+
+# =========================================================
+# CONVERSÃO DE NÚMEROS
+# =========================================================
 
 def converter_numeros(serie):
-    if pd.api.types.is_numeric_dtype(serie):
+
+    if pd.api.types.is_numeric_dtype(
+        serie
+    ):
 
         return pd.to_numeric(
+
             serie,
+
             errors="coerce",
+
         ).fillna(0)
 
-    texto = serie.astype(str).str.strip()
+    texto = serie.astype(
+        str
+    ).str.strip()
 
     texto = texto.str.replace(
         "\u00a0",
@@ -263,15 +409,25 @@ def converter_numeros(serie):
         na=False,
     )
 
-    tem_ambos = tem_virgula & tem_ponto
+    tem_ambos = (
+        tem_virgula
+        & tem_ponto
+    )
 
-    texto.loc[tem_ambos] = (
-        texto.loc[tem_ambos]
+    texto.loc[
+        tem_ambos
+    ] = (
+
+        texto.loc[
+            tem_ambos
+        ]
+
         .str.replace(
             ".",
             "",
             regex=False,
         )
+
         .str.replace(
             ",",
             ".",
@@ -279,10 +435,20 @@ def converter_numeros(serie):
         )
     )
 
-    apenas_virgula = tem_virgula & ~tem_ponto
+    apenas_virgula = (
 
-    texto.loc[apenas_virgula] = (
-        texto.loc[apenas_virgula]
+        tem_virgula
+        & ~tem_ponto
+    )
+
+    texto.loc[
+        apenas_virgula
+    ] = (
+
+        texto.loc[
+            apenas_virgula
+        ]
+
         .str.replace(
             ",",
             ".",
@@ -291,78 +457,193 @@ def converter_numeros(serie):
     )
 
     return pd.to_numeric(
+
         texto,
+
         errors="coerce",
+
     ).fillna(0)
 
 
-def ler_ficheiro(ficheiro):
+# =========================================================
+# LIMPEZA
+# =========================================================
+
+def limpar_linhas_tecnicas(dados):
+
+    if dados is None:
+        return dados
+
+    dados = dados.copy()
+
+    if "produto" in dados.columns:
+
+        produto_normalizado = (
+
+            dados["produto"]
+
+            .astype(str)
+
+            .map(
+                normalizar_texto
+            )
+        )
+
+        ignorar = produto_normalizado.isin(
+            [
+                "total",
+                "totais",
+                "subtotal",
+                "rappel",
+                "rapel",
+            ]
+        )
+
+        dados = dados.loc[
+            ~ignorar
+        ].copy()
+
+    if "referencia" in dados.columns:
+
+        referencia_normalizada = (
+
+            dados["referencia"]
+
+            .astype(str)
+
+            .map(
+                normalizar_texto
+            )
+        )
+
+        ignorar_referencia = (
+
+            referencia_normalizada.isin(
+                [
+                    "ra",
+                    "rappel",
+                    "rapel",
+                ]
+            )
+        )
+
+        dados = dados.loc[
+            ~ignorar_referencia
+        ].copy()
+
+    return dados
+
+
+# =========================================================
+# LEITURA DOS EXCEL
+# =========================================================
+
+def ler_ficheiro_tabular(ficheiro):
+
     conteudo = ficheiro.getvalue()
 
-    extensao = ficheiro.name.lower().rsplit(
-        ".",
-        1,
-    )[-1]
+    extensao = (
+
+        ficheiro.name
+
+        .lower()
+
+        .rsplit(
+            ".",
+            1,
+        )[-1]
+    )
 
     if extensao == "csv":
 
         ultimo_erro = None
 
         for encoding in [
+
             "utf-8-sig",
             "utf-8",
             "latin-1",
+
         ]:
 
             try:
 
                 dados = pd.read_csv(
-                    io.BytesIO(conteudo),
+
+                    io.BytesIO(
+                        conteudo
+                    ),
+
                     sep=None,
+
                     engine="python",
+
                     encoding=encoding,
                 )
+
+                linha_cabecalho = 0
 
                 break
 
             except Exception as erro:
+
                 ultimo_erro = erro
 
         else:
 
             raise ValueError(
-                f"Não foi possível ler o CSV: {ultimo_erro}"
-            )
 
-        linha_cabecalho = 0
+                f"Não foi possível ler o CSV: "
+                f"{ultimo_erro}"
+            )
 
     else:
 
         amostra = pd.read_excel(
-            io.BytesIO(conteudo),
+
+            io.BytesIO(
+                conteudo
+            ),
+
             sheet_name=0,
+
             header=None,
-            nrows=30,
+
+            nrows=40,
+
             engine="openpyxl",
         )
 
         pontuacoes = amostra.apply(
+
             lambda linha: pontuar_cabecalho(
                 linha.tolist()
             ),
+
             axis=1,
         )
 
         linha_cabecalho = (
-            int(pontuacoes.idxmax())
+
+            int(
+                pontuacoes.idxmax()
+            )
+
             if len(pontuacoes)
+
             else 0
         )
 
         dados = pd.read_excel(
-            io.BytesIO(conteudo),
+
+            io.BytesIO(
+                conteudo
+            ),
+
             sheet_name=0,
+
             header=linha_cabecalho,
+
             engine="openpyxl",
         )
 
@@ -371,164 +652,704 @@ def ler_ficheiro(ficheiro):
     ).copy()
 
     dados.columns = [
+
         str(coluna).strip()
-        for coluna in dados.columns
+
+        if str(coluna).strip()
+
+        else f"coluna_{indice}"
+
+        for indice, coluna
+
+        in enumerate(
+            dados.columns
+        )
     ]
 
     renomear = {}
 
-    nomes_utilizados = set()
+    utilizados = set()
 
     for coluna in dados.columns:
 
-        nome_final = identificar_coluna(coluna)
+        nome_final = identificar_coluna(
+            coluna
+        )
 
         if (
+
             nome_final
-            and nome_final not in nomes_utilizados
+
+            and nome_final
+            not in utilizados
         ):
 
-            renomear[coluna] = nome_final
+            renomear[
+                coluna
+            ] = nome_final
 
-            nomes_utilizados.add(nome_final)
+            utilizados.add(
+                nome_final
+            )
 
     dados = dados.rename(
         columns=renomear
     )
 
-    colunas_numericas = [
+    for coluna in [
+
         "stock_inicial",
         "entradas",
         "saidas",
         "stock_final",
         "valor_entradas",
         "valor_saidas",
-    ]
 
-    for coluna in colunas_numericas:
+    ]:
 
         if coluna in dados.columns:
 
-            dados[coluna] = converter_numeros(
-                dados[coluna]
+            dados[
+                coluna
+            ] = converter_numeros(
+
+                dados[
+                    coluna
+                ]
             )
+
+    if "referencia" in dados.columns:
+
+        dados[
+            "referencia"
+        ] = dados[
+            "referencia"
+        ].map(
+            normalizar_referencia
+        )
 
     if "data" in dados.columns:
 
-        dados["data"] = pd.to_datetime(
-            dados["data"],
+        dados[
+            "data"
+        ] = pd.to_datetime(
+
+            dados[
+                "data"
+            ],
+
             errors="coerce",
+
             dayfirst=True,
         )
 
-    if "produto" in dados.columns:
-
-        produto_normalizado = (
-            dados["produto"]
-            .astype(str)
-            .map(normalizar_texto)
-        )
-
-        linhas_total = produto_normalizado.str.match(
-            r"^(total|totais|subtotal)$",
-            na=False,
-        )
-
-        dados = dados.loc[
-            ~linhas_total
-        ]
+    dados = limpar_linhas_tecnicas(
+        dados
+    )
 
     return (
-        dados.reset_index(drop=True),
+
+        dados.reset_index(
+            drop=True
+        ),
+
         linha_cabecalho,
     )
 
 
 def garantir_produto(dados):
+
+    if dados is None:
+        return None
+
     dados = dados.copy()
 
     if "produto" not in dados.columns:
 
         if "referencia" in dados.columns:
 
-            dados["produto"] = (
-                dados["referencia"]
-                .astype(str)
-            )
+            dados[
+                "produto"
+            ] = dados[
+                "referencia"
+            ].astype(str)
 
         else:
 
-            dados["produto"] = [
-                f"Produto {numero + 1}"
-                for numero in range(len(dados))
+            dados[
+                "produto"
+            ] = [
+
+                f"Produto {indice + 1}"
+
+                for indice
+                in range(
+                    len(dados)
+                )
             ]
 
     return dados
 
 
-def formatar_numero(valor, casas=0):
-    try:
+# =========================================================
+# ACESSO AOS INVENTÁRIOS
+# =========================================================
 
-        return (
-            f"{float(valor):,.{casas}f}"
-            .replace(",", "X")
-            .replace(".", ",")
-            .replace("X", ".")
+def obter_inventario(
+    fornecedor,
+    periodo="Atual",
+):
+
+    return st.session_state.inventarios[
+        fornecedor
+    ][
+        periodo
+    ]
+
+
+def inventarios_carregados(
+    periodo="Atual",
+):
+
+    blocos = []
+
+    for fornecedor in FORNECEDORES:
+
+        dados = obter_inventario(
+
+            fornecedor,
+
+            periodo,
         )
 
-    except Exception:
+        if dados is not None:
 
-        return "0"
+            copia = garantir_produto(
+                dados
+            )
+
+            copia[
+                "fornecedor"
+            ] = fornecedor
+
+            blocos.append(
+                copia
+            )
+
+    if not blocos:
+        return None
+
+    return pd.concat(
+
+        blocos,
+
+        ignore_index=True,
+
+        sort=False,
+    )
+
+
+def mapa_referencia_fornecedor():
+
+    mapa = {}
+
+    for fornecedor in FORNECEDORES:
+
+        for periodo in PERIODOS:
+
+            dados = obter_inventario(
+
+                fornecedor,
+
+                periodo,
+            )
+
+            if (
+
+                dados is not None
+
+                and "referencia"
+                in dados.columns
+            ):
+
+                for referencia in dados[
+                    "referencia"
+                ].dropna():
+
+                    mapa[
+                        normalizar_referencia(
+                            referencia
+                        )
+                    ] = fornecedor
+
+    return mapa
+
+
+# =========================================================
+# LEITURA DAS FATURAS PDF
+# =========================================================
+
+def extrair_texto_pdf(ficheiro):
+
+    leitor = PdfReader(
+
+        io.BytesIO(
+            ficheiro.getvalue()
+        )
+    )
+
+    textos = []
+
+    for pagina in leitor.pages:
+
+        textos.append(
+
+            pagina.extract_text()
+            or ""
+        )
+
+    return textos
+
+
+def extrair_cabecalho_fatura(texto):
+
+    numero_fatura = None
+
+    cliente = None
+
+    vendedor = None
+
+    data_fatura = None
+
+    correspondencia = re.search(
+
+        r"FT\d+[A-Z]\d+/(\d+)",
+
+        texto,
+
+        flags=re.IGNORECASE,
+    )
+
+    if correspondencia:
+
+        numero_fatura = (
+            correspondencia.group(1)
+        )
+
+    datas = re.findall(
+
+        r"\b(20\d{2}[-/.]\d{2}[-/.]\d{2})\b",
+
+        texto,
+    )
+
+    if datas:
+        data_fatura = datas[0]
+
+    linhas = [
+
+        linha.strip()
+
+        for linha in texto.splitlines()
+
+        if linha.strip()
+    ]
+
+    for indice, linha in enumerate(
+        linhas
+    ):
+
+        if (
+
+            "data cliente vend"
+
+            in normalizar_texto(
+                linha
+            )
+        ):
+
+            numeros = []
+
+            for proxima in linhas[
+                indice + 1:
+                indice + 7
+            ]:
+
+                numeros.extend(
+
+                    re.findall(
+                        r"\b\d+\b",
+                        proxima,
+                    )
+                )
+
+            if len(numeros) >= 2:
+
+                cliente = numeros[0]
+
+                vendedor = numeros[1]
+
+                break
+
+    return {
+
+        "numero_fatura": (
+            numero_fatura
+            or "Sem número"
+        ),
+
+        "cliente": (
+            cliente
+            or "Não identificado"
+        ),
+
+        "vendedor": (
+            vendedor
+            or "Não identificado"
+        ),
+
+        "data_fatura": (
+            data_fatura
+            or ""
+        ),
+    }
+
+
+def extrair_linhas_fatura(texto):
+
+    artigos = []
+
+    padrao = re.compile(
+
+        r"^\s*"
+
+        r"(?P<referencia>\d+)\s+"
+
+        r"(?P<produto>.+?)\s+"
+
+        r"(?P<quantidade>\d+(?:[.,]\d+)?)\s+"
+
+        r"(?:M\d+|[A-Z]\d+)\s+"
+
+        r"(?:Reg|Isen|Ise|Normal)?",
+
+        flags=re.IGNORECASE,
+    )
+
+    for linha in texto.splitlines():
+
+        correspondencia = padrao.search(
+            linha
+        )
+
+        if not correspondencia:
+            continue
+
+        referencia = (
+
+            correspondencia.group(
+                "referencia"
+            )
+        )
+
+        produto = (
+
+            correspondencia.group(
+                "produto"
+            ).strip()
+        )
+
+        quantidade_texto = (
+
+            correspondencia.group(
+                "quantidade"
+            )
+
+            .replace(
+                ",",
+                ".",
+            )
+        )
+
+        try:
+
+            quantidade = float(
+                quantidade_texto
+            )
+
+        except ValueError:
+
+            continue
+
+        artigos.append(
+            {
+                "referencia": normalizar_referencia(
+                    referencia
+                ),
+                "produto": produto,
+                "quantidade": quantidade,
+            }
+        )
+
+    return artigos
+
+
+def ler_fatura_pdf(
+    ficheiro,
+    dia_saida,
+):
+
+    paginas = extrair_texto_pdf(
+        ficheiro
+    )
+
+    if not paginas:
+
+        raise ValueError(
+            "O PDF não contém texto legível."
+        )
+
+    faturas_processadas = set()
+
+    registos = []
+
+    mapa_fornecedores = (
+        mapa_referencia_fornecedor()
+    )
+
+    for texto in paginas:
+
+        cabecalho = (
+            extrair_cabecalho_fatura(
+                texto
+            )
+        )
+
+        chave_fatura = cabecalho[
+            "numero_fatura"
+        ]
+
+        # Evita contar ORIGINAL e DUPLICADO.
+        if chave_fatura in faturas_processadas:
+            continue
+
+        faturas_processadas.add(
+            chave_fatura
+        )
+
+        artigos = extrair_linhas_fatura(
+            texto
+        )
+
+        for artigo in artigos:
+
+            referencia = artigo[
+                "referencia"
+            ]
+
+            fornecedor = (
+                mapa_fornecedores.get(
+                    referencia,
+                    "Não identificado",
+                )
+            )
+
+            registos.append(
+                {
+                    **cabecalho,
+
+                    "dia_saida": dia_saida,
+
+                    "referencia": referencia,
+
+                    "produto": artigo[
+                        "produto"
+                    ],
+
+                    "quantidade": artigo[
+                        "quantidade"
+                    ],
+
+                    "fornecedor": fornecedor,
+
+                    "ficheiro": ficheiro.name,
+                }
+            )
+
+    if not registos:
+
+        raise ValueError(
+            "Não consegui reconhecer artigos nesta fatura."
+        )
+
+    return pd.DataFrame(
+        registos
+    )
+
+
+def adicionar_fatura(
+    nova_fatura,
+):
+
+    existentes = (
+        st.session_state.faturas.copy()
+    )
+
+    if existentes.empty:
+
+        st.session_state.faturas = (
+            nova_fatura.copy()
+        )
+
+        return len(nova_fatura), 0
+
+    combinado = pd.concat(
+
+        [
+            existentes,
+            nova_fatura,
+        ],
+
+        ignore_index=True,
+    )
+
+    antes = len(combinado)
+
+    combinado = combinado.drop_duplicates(
+
+        subset=[
+            "numero_fatura",
+            "referencia",
+            "quantidade",
+            "dia_saida",
+        ],
+
+        keep="first",
+    )
+
+    duplicados = (
+
+        antes
+        - len(combinado)
+    )
+
+    adicionados = (
+
+        len(combinado)
+        - len(existentes)
+    )
+
+    st.session_state.faturas = (
+
+        combinado.reset_index(
+            drop=True
+        )
+    )
+
+    return adicionados, duplicados
+
+
+# =========================================================
+# EXPORTAR EXCEL
+# =========================================================
+
+def converter_para_excel(
+    dados,
+    folha="Dados",
+):
+
+    memoria = io.BytesIO()
+
+    with pd.ExcelWriter(
+
+        memoria,
+
+        engine="openpyxl",
+
+    ) as writer:
+
+        dados.to_excel(
+
+            writer,
+
+            index=False,
+
+            sheet_name=folha[:31],
+        )
+
+    memoria.seek(0)
+
+    return memoria.getvalue()
 
 
 # =========================================================
 # CÁLCULO DE ENCOMENDAS
 # =========================================================
 
-def calcular_encomendas(atual, anterior):
+def calcular_encomendas(
+    fornecedor,
+):
 
-    if atual is None or anterior is None:
+    atual = obter_inventario(
+
+        fornecedor,
+
+        "Atual",
+    )
+
+    anterior = obter_inventario(
+
+        fornecedor,
+
+        "Anterior",
+    )
+
+    if atual is None:
 
         return (
+
             None,
-            "Carrega a listagem atual e a listagem anterior.",
+
+            f"Carrega primeiro o período atual de {fornecedor}.",
         )
 
-    atual = garantir_produto(atual)
-
-    anterior = garantir_produto(anterior)
-
-    if (
-        "referencia" in atual.columns
-        and "referencia" in anterior.columns
-    ):
-
-        chave = "referencia"
-
-    else:
-
-        chave = "produto"
+    atual = garantir_produto(
+        atual
+    )
 
     if not {
+
         "saidas",
         "stock_final",
-    }.issubset(atual.columns):
+
+    }.issubset(
+        atual.columns
+    ):
 
         return (
+
             None,
-            "A listagem atual precisa das colunas Saídas e Stock Final.",
+
+            "A listagem precisa das colunas "
+            "Saídas e Stock Final.",
         )
 
-    if "saidas" not in anterior.columns:
+    chave = (
 
-        return (
-            None,
-            "A listagem anterior precisa da coluna Saídas.",
-        )
+        "referencia"
 
-    dados_atuais = atual.groupby(
+        if "referencia"
+        in atual.columns
+
+        else "produto"
+    )
+
+    atuais = atual.groupby(
+
         chave,
+
         as_index=False,
+
     ).agg(
 
         produto=(
@@ -541,167 +1362,257 @@ def calcular_encomendas(atual, anterior):
             "sum",
         ),
 
-        stock_atual=(
+        stock_phc=(
             "stock_final",
             "sum",
         ),
     )
 
-    dados_anteriores = anterior.groupby(
-        chave,
-        as_index=False,
-    ).agg(
+    if (
 
-        produto_anterior=(
-            "produto",
-            "first",
-        ),
+        anterior is not None
 
-        saidas_anterior=(
-            "saidas",
-            "sum",
-        ),
-    )
+        and "saidas"
+        in anterior.columns
 
-    resultado = dados_atuais.merge(
-        dados_anteriores,
-        on=chave,
-        how="outer",
-    )
+        and chave
+        in anterior.columns
+    ):
 
-    resultado["produto"] = (
-        resultado["produto"]
-        .fillna(
-            resultado["produto_anterior"]
+        anterior = garantir_produto(
+            anterior
         )
-    )
 
-    resultado = resultado.drop(
-        columns=["produto_anterior"],
-        errors="ignore",
-    )
+        anteriores = anterior.groupby(
 
-    for coluna in [
-        "saidas_atual",
-        "saidas_anterior",
-        "stock_atual",
-    ]:
+            chave,
 
-        resultado[coluna] = pd.to_numeric(
-            resultado[coluna],
-            errors="coerce",
-        ).fillna(0)
+            as_index=False,
 
-    resultado["procura_base"] = (
-        resultado["saidas_atual"] * 0.65
-        + resultado["saidas_anterior"] * 0.35
-    )
+        ).agg(
 
-    resultado["stock_alvo"] = (
-        resultado["procura_base"]
-        * st.session_state.cobertura
+            saidas_anterior=(
+                "saidas",
+                "sum",
+            )
+        )
+
+        resultado = atuais.merge(
+
+            anteriores,
+
+            on=chave,
+
+            how="left",
+        )
+
+    else:
+
+        resultado = atuais.copy()
+
+        resultado[
+            "saidas_anterior"
+        ] = 0
+
+    resultado[
+        "saidas_anterior"
+    ] = pd.to_numeric(
+
+        resultado[
+            "saidas_anterior"
+        ],
+
+        errors="coerce",
+
+    ).fillna(0)
+
+    if anterior is None:
+
+        resultado[
+            "procura_base"
+        ] = resultado[
+            "saidas_atual"
+        ]
+
+    else:
+
+        resultado[
+            "procura_base"
+        ] = (
+
+            resultado[
+                "saidas_atual"
+            ] * 0.65
+
+            + resultado[
+                "saidas_anterior"
+            ] * 0.35
+        )
+
+    resultado[
+        "stock_alvo"
+    ] = (
+
+        resultado[
+            "procura_base"
+        ]
+
+        * float(
+            st.session_state.cobertura
+        )
+
         * (
+
             1
-            + st.session_state.seguranca / 100
+
+            + float(
+                st.session_state.seguranca
+            ) / 100
         )
     )
 
     necessidade = (
-        resultado["stock_alvo"]
-        - resultado["stock_atual"]
-    ).clip(lower=0)
+
+        resultado[
+            "stock_alvo"
+        ]
+
+        - resultado[
+            "stock_phc"
+        ]
+    ).clip(
+        lower=0
+    )
 
     multiplo = max(
-        int(st.session_state.multiplo),
+
+        int(
+            st.session_state.multiplo
+        ),
+
         1,
     )
 
-    resultado["sugestao"] = necessidade.apply(
+    resultado[
+        "sugestao"
+    ] = necessidade.apply(
+
         lambda quantidade: (
+
             int(
+
                 math.ceil(
-                    quantidade / multiplo
-                )
-                * multiplo
+
+                    quantidade
+                    / multiplo
+
+                ) * multiplo
             )
+
             if quantidade > 0
+
             else 0
         )
     )
 
-    resultado["variacao_pct"] = resultado.apply(
+    resultado[
+        "variacao_pct"
+    ] = resultado.apply(
+
         lambda linha: (
 
             (
-                (
-                    linha["saidas_atual"]
-                    - linha["saidas_anterior"]
-                )
-                / linha["saidas_anterior"]
-            )
-            * 100
 
-            if linha["saidas_anterior"] != 0
+                (
+                    linha[
+                        "saidas_atual"
+                    ]
+
+                    - linha[
+                        "saidas_anterior"
+                    ]
+                )
+
+                / linha[
+                    "saidas_anterior"
+                ]
+            ) * 100
+
+            if linha[
+                "saidas_anterior"
+            ] != 0
 
             else (
+
                 100
-                if linha["saidas_atual"] > 0
+
+                if linha[
+                    "saidas_atual"
+                ] > 0
+
                 else 0
             )
         ),
+
         axis=1,
     )
 
-    resultado["motivo"] = resultado.apply(
+    resultado[
+        "motivo"
+    ] = resultado.apply(
+
         lambda linha: (
 
             "Vendas a subir e stock insuficiente"
 
             if (
-                linha["sugestao"] > 0
-                and linha["variacao_pct"] > 10
+
+                linha[
+                    "sugestao"
+                ] > 0
+
+                and linha[
+                    "variacao_pct"
+                ] > 10
             )
 
-            else "Stock insuficiente para a procura estimada"
+            else "Stock insuficiente"
 
-            if linha["sugestao"] > 0
+            if linha[
+                "sugestao"
+            ] > 0
 
             else "Stock suficiente"
         ),
+
         axis=1,
     )
 
+    resultado[
+        "fornecedor"
+    ] = fornecedor
+
     resultado = resultado.sort_values(
+
         [
             "sugestao",
             "saidas_atual",
         ],
+
         ascending=[
             False,
             False,
         ],
     )
 
-    return resultado, None
+    return (
 
+        resultado.reset_index(
+            drop=True
+        ),
 
-def converter_para_excel(dados):
-    memoria = io.BytesIO()
-
-    with pd.ExcelWriter(
-        memoria,
-        engine="openpyxl",
-    ) as writer:
-
-        dados.to_excel(
-            writer,
-            index=False,
-            sheet_name="Encomenda",
-        )
-
-    memoria.seek(0)
-
-    return memoria.getvalue()
+        None,
+    )
 
 
 # =========================================================
@@ -711,58 +1622,92 @@ def converter_para_excel(dados):
 with st.sidebar:
 
     st.markdown(
-        '<div class="inviora-brand">INVIORA</div>',
+
+        '<div class="inviora-brand">'
+        'INVIORA'
+        '</div>',
+
         unsafe_allow_html=True,
     )
 
     st.markdown(
+
         '<div class="inviora-tagline">'
         'Transformar dados em decisões.'
         '</div>',
+
         unsafe_allow_html=True,
     )
 
     pagina = st.radio(
+
         "Navegação",
+
         [
             "🏠 Dashboard",
-            "📥 Importar dados",
+            "📥 Importar inventário",
+            "🧾 Faturas pendentes",
             "📦 Encomendas",
             "📈 Vendas",
             "📋 Produtos",
-            "🧠 Assistente",
             "⚙️ Definições",
         ],
+
         label_visibility="collapsed",
     )
 
     st.divider()
 
-    estado_atual = (
-        "🟢 Atual"
-        if st.session_state.atual is not None
-        else "⚪ Atual"
-    )
+    for fornecedor in FORNECEDORES:
 
-    estado_anterior = (
-        "🟢 Anterior"
-        if st.session_state.anterior is not None
-        else "⚪ Anterior"
-    )
+        atual = (
 
-    estado_historico = (
-        "🟢 Histórico"
-        if st.session_state.historico is not None
-        else "⚪ Histórico"
+            "🟢"
+
+            if obter_inventario(
+                fornecedor,
+                "Atual",
+            ) is not None
+
+            else "⚪"
+        )
+
+        anterior = (
+
+            "🟢"
+
+            if obter_inventario(
+                fornecedor,
+                "Anterior",
+            ) is not None
+
+            else "⚪"
+        )
+
+        st.caption(
+
+            f"{atual} {fornecedor} atual · "
+            f"{anterior} anterior"
+        )
+
+    numero_faturas = (
+
+        st.session_state.faturas[
+            "numero_fatura"
+        ].nunique()
+
+        if not st.session_state.faturas.empty
+
+        else 0
     )
 
     st.caption(
-        f"{estado_atual} · "
-        f"{estado_anterior} · "
-        f"{estado_historico}"
+        f"🧾 Faturas: {numero_faturas}"
     )
 
-    st.caption("Inviora v0.2.0")
+    st.caption(
+        "Inviora v0.3.0"
+    )
 
 
 # =========================================================
@@ -773,104 +1718,236 @@ if pagina == "🏠 Dashboard":
 
     st.title("Dashboard")
 
-    st.caption(
-        "O que aconteceu, o que está a acontecer "
-        "e o que precisa de atenção."
+    fornecedor_filtro = st.selectbox(
+
+        "Fornecedor",
+
+        [
+            "Todos",
+            *FORNECEDORES,
+        ],
     )
 
-    atual = st.session_state.atual
+    if fornecedor_filtro == "Todos":
 
-    anterior = st.session_state.anterior
+        atual = inventarios_carregados(
+            "Atual"
+        )
+
+    else:
+
+        atual = obter_inventario(
+
+            fornecedor_filtro,
+
+            "Atual",
+        )
+
+        if atual is not None:
+
+            atual = garantir_produto(
+                atual
+            )
+
+            atual[
+                "fornecedor"
+            ] = fornecedor_filtro
 
     if atual is None:
 
         st.info(
-            "Abre **Importar dados** "
-            "e carrega a listagem atual."
+            "Carrega pelo menos uma listagem atual."
         )
 
         st.stop()
 
-    atual = garantir_produto(atual)
-
-    total_produtos = len(atual)
-
-    total_saidas = (
-        atual["saidas"].sum()
-        if "saidas" in atual.columns
-        else 0
+    faturas = (
+        st.session_state.faturas.copy()
     )
-
-    stock_total = (
-        atual["stock_final"].sum()
-        if "stock_final" in atual.columns
-        else 0
-    )
-
-    produtos_criticos = (
-        int(
-            (
-                atual["stock_final"] <= 0
-            ).sum()
-        )
-        if "stock_final" in atual.columns
-        else 0
-    )
-
-    variacao = None
 
     if (
-        anterior is not None
-        and "saidas" in anterior.columns
+
+        fornecedor_filtro != "Todos"
+
+        and not faturas.empty
     ):
 
-        total_anterior = anterior[
+        faturas = faturas[
+
+            faturas[
+                "fornecedor"
+            ] == fornecedor_filtro
+        ]
+
+    total_produtos = len(
+        atual
+    )
+
+    total_saidas = (
+
+        atual[
             "saidas"
         ].sum()
 
-        if total_anterior != 0:
+        if "saidas"
+        in atual.columns
 
-            percentagem = (
-                (
-                    total_saidas
-                    - total_anterior
-                )
-                / total_anterior
-            ) * 100
+        else 0
+    )
 
-            variacao = (
-                f"{percentagem:.1f}% "
-                f"vs anterior"
-            )
+    stock_phc = (
 
-    coluna1, coluna2, coluna3, coluna4 = st.columns(
-        4
+        atual[
+            "stock_final"
+        ].sum()
+
+        if "stock_final"
+        in atual.columns
+
+        else 0
+    )
+
+    faturado_pendente = (
+
+        faturas[
+            "quantidade"
+        ].sum()
+
+        if not faturas.empty
+
+        else 0
+    )
+
+    stock_fisico = (
+
+        stock_phc
+        + faturado_pendente
+    )
+
+    criticos = (
+
+        int(
+
+            (
+                atual[
+                    "stock_final"
+                ] <= 0
+            ).sum()
+        )
+
+        if "stock_final"
+        in atual.columns
+
+        else 0
+    )
+
+    coluna1, coluna2, coluna3, coluna4, coluna5 = st.columns(
+        5
     )
 
     coluna1.metric(
         "Produtos",
-        formatar_numero(total_produtos),
+        formatar_numero(
+            total_produtos
+        ),
     )
 
     coluna2.metric(
         "Saídas",
-        formatar_numero(total_saidas, 1),
-        variacao,
+        formatar_numero(
+            total_saidas,
+            1,
+        ),
     )
 
     coluna3.metric(
-        "Stock final",
-        formatar_numero(stock_total, 1),
+        "Stock PHC",
+        formatar_numero(
+            stock_phc,
+            1,
+        ),
     )
 
     coluna4.metric(
+        "Faturado no armazém",
+        formatar_numero(
+            faturado_pendente,
+            1,
+        ),
+    )
+
+    coluna5.metric(
+        "Stock físico estimado",
+        formatar_numero(
+            stock_fisico,
+            1,
+        ),
+    )
+
+    coluna1, coluna2, coluna3 = st.columns(
+        3
+    )
+
+    quarta = (
+
+        faturas.loc[
+
+            faturas[
+                "dia_saida"
+            ] == "Quarta-feira",
+
+            "quantidade",
+
+        ].sum()
+
+        if not faturas.empty
+
+        else 0
+    )
+
+    quinta = (
+
+        faturas.loc[
+
+            faturas[
+                "dia_saida"
+            ] == "Quinta-feira",
+
+            "quantidade",
+
+        ].sum()
+
+        if not faturas.empty
+
+        else 0
+    )
+
+    coluna1.metric(
+        "Sai quarta",
+        formatar_numero(
+            quarta,
+            1,
+        ),
+    )
+
+    coluna2.metric(
+        "Sai quinta",
+        formatar_numero(
+            quinta,
+            1,
+        ),
+    )
+
+    coluna3.metric(
         "Stock ≤ 0",
-        formatar_numero(produtos_criticos),
+        formatar_numero(
+            criticos
+        ),
     )
 
     esquerda, direita = st.columns(
         [
-            1.25,
+            1.2,
             1,
         ]
     )
@@ -883,44 +1960,45 @@ if pagina == "🏠 Dashboard":
 
         if "saidas" in atual.columns:
 
-            produtos_top = (
+            ranking = (
+
                 atual.groupby(
+
                     "produto",
+
                     as_index=False,
-                )["saidas"]
+
+                )[
+                    "saidas"
+                ]
+
                 .sum()
+
                 .nlargest(
                     12,
                     "saidas",
                 )
+
                 .sort_values(
                     "saidas"
                 )
             )
 
             grafico = px.bar(
-                produtos_top,
-                x="saidas",
-                y="produto",
-                orientation="h",
-                labels={
-                    "saidas": "Saídas",
-                    "produto": "",
-                },
-            )
 
-            grafico.update_layout(
-                height=430,
-                margin=dict(
-                    l=0,
-                    r=10,
-                    t=10,
-                    b=0,
-                ),
+                ranking,
+
+                x="saidas",
+
+                y="produto",
+
+                orientation="h",
             )
 
             st.plotly_chart(
+
                 grafico,
+
                 use_container_width=True,
             )
 
@@ -932,149 +2010,487 @@ if pagina == "🏠 Dashboard":
 
         if "stock_final" in atual.columns:
 
-            colunas_alerta = [
+            colunas = [
+
                 coluna
+
                 for coluna in [
+
+                    "fornecedor",
                     "referencia",
                     "produto",
                     "stock_final",
                     "saidas",
+
                 ]
-                if coluna in atual.columns
+
+                if coluna
+                in atual.columns
             ]
 
-            alertas = atual.loc[
-                atual["stock_final"] <= 0,
-                colunas_alerta,
+            alerta = atual.loc[
+
+                atual[
+                    "stock_final"
+                ] <= 0,
+
+                colunas,
+
             ].sort_values(
                 "stock_final"
             )
 
-            if alertas.empty:
+            st.dataframe(
 
-                st.success(
-                    "Não existem produtos "
-                    "com stock igual ou inferior a zero."
-                )
+                alerta.head(20),
 
-            else:
+                use_container_width=True,
 
-                st.dataframe(
-                    alertas.head(20),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                hide_index=True,
+            )
 
 
 # =========================================================
-# IMPORTAR DADOS
+# IMPORTAR INVENTÁRIO
 # =========================================================
 
-elif pagina == "📥 Importar dados":
+elif pagina == "📥 Importar inventário":
 
-    st.title("Importar dados")
-
-    st.warning(
-        "Não coloques ficheiros reais da empresa "
-        "dentro do GitHub. Carrega-os apenas aqui "
-        "na aplicação e com autorização."
+    st.title(
+        "Importar inventário"
     )
 
-    aba_atual, aba_anterior, aba_historico = st.tabs(
+    fornecedor = st.selectbox(
+
+        "Fornecedor",
+
+        FORNECEDORES,
+    )
+
+    periodo = st.radio(
+
+        "Período",
+
+        PERIODOS,
+
+        horizontal=True,
+    )
+
+    ficheiro = st.file_uploader(
+
+        f"{fornecedor} — {periodo}",
+
+        type=[
+            "xlsx",
+            "csv",
+        ],
+
+        key=(
+            f"upload_"
+            f"{fornecedor}_"
+            f"{periodo}"
+        ),
+    )
+
+    if ficheiro is not None:
+
+        try:
+
+            dados, cabecalho = (
+                ler_ficheiro_tabular(
+                    ficheiro
+                )
+            )
+
+            st.session_state.inventarios[
+                fornecedor
+            ][
+                periodo
+            ] = dados
+
+            st.session_state.nomes_ficheiros[
+                fornecedor
+            ][
+                periodo
+            ] = ficheiro.name
+
+            st.success(
+
+                f"{fornecedor} {periodo.lower()} carregado. "
+                f"{len(dados)} linhas."
+            )
+
+            st.caption(
+
+                "Colunas reconhecidas: "
+
+                + ", ".join(
+
+                    dados.columns.astype(
+                        str
+                    )
+                )
+            )
+
+            st.dataframe(
+
+                dados.head(25),
+
+                use_container_width=True,
+
+                hide_index=True,
+            )
+
+        except Exception as erro:
+
+            st.error(
+
+                f"Não consegui ler o ficheiro: "
+                f"{erro}"
+            )
+
+    estado = []
+
+    for nome_fornecedor in FORNECEDORES:
+
+        for nome_periodo in PERIODOS:
+
+            dados = obter_inventario(
+
+                nome_fornecedor,
+
+                nome_periodo,
+            )
+
+            estado.append(
+                {
+                    "Fornecedor": nome_fornecedor,
+                    "Período": nome_periodo,
+                    "Ficheiro": (
+                        st.session_state.nomes_ficheiros[
+                            nome_fornecedor
+                        ][
+                            nome_periodo
+                        ]
+                        or "Não carregado"
+                    ),
+                    "Linhas": (
+                        len(dados)
+                        if dados is not None
+                        else 0
+                    ),
+                }
+            )
+
+    st.dataframe(
+
+        pd.DataFrame(
+            estado
+        ),
+
+        use_container_width=True,
+
+        hide_index=True,
+    )
+
+
+# =========================================================
+# FATURAS PENDENTES
+# =========================================================
+
+elif pagina == "🧾 Faturas pendentes":
+
+    st.title(
+        "Faturas pendentes"
+    )
+
+    st.info(
+        "O PHC já retirou estas quantidades do stock. "
+        "A Inviora apenas soma as faturas para calcular "
+        "o stock físico e preparar as saídas."
+    )
+
+    dia_saida = st.radio(
+
+        "A fatura sai em:",
+
+        DIAS_SAIDA,
+
+        horizontal=True,
+    )
+
+    faturas_pdf = st.file_uploader(
+
+        "Carregar faturas PDF",
+
+        type=[
+            "pdf"
+        ],
+
+        accept_multiple_files=True,
+    )
+
+    if (
+
+        faturas_pdf
+
+        and st.button(
+            "Ler e adicionar faturas",
+            type="primary",
+        )
+    ):
+
+        total_adicionados = 0
+
+        total_duplicados = 0
+
+        for fatura_pdf in faturas_pdf:
+
+            try:
+
+                nova_fatura = ler_fatura_pdf(
+
+                    fatura_pdf,
+
+                    dia_saida,
+                )
+
+                adicionados, duplicados = (
+                    adicionar_fatura(
+                        nova_fatura
+                    )
+                )
+
+                total_adicionados += adicionados
+
+                total_duplicados += duplicados
+
+            except Exception as erro:
+
+                st.error(
+
+                    f"{fatura_pdf.name}: "
+                    f"{erro}"
+                )
+
+        if total_adicionados:
+
+            st.success(
+
+                f"{total_adicionados} linhas adicionadas."
+            )
+
+        if total_duplicados:
+
+            st.warning(
+
+                f"{total_duplicados} duplicados ignorados."
+            )
+
+    faturas = (
+        st.session_state.faturas
+    )
+
+    if faturas.empty:
+
+        st.info(
+            "Ainda não existem faturas carregadas."
+        )
+
+        st.stop()
+
+    coluna1, coluna2, coluna3 = st.columns(
+        3
+    )
+
+    coluna1.metric(
+
+        "Faturas",
+
+        faturas[
+            "numero_fatura"
+        ].nunique(),
+    )
+
+    coluna2.metric(
+
+        "Unidades quarta",
+
+        formatar_numero(
+
+            faturas.loc[
+
+                faturas[
+                    "dia_saida"
+                ] == "Quarta-feira",
+
+                "quantidade",
+
+            ].sum(),
+
+            1,
+        ),
+    )
+
+    coluna3.metric(
+
+        "Unidades quinta",
+
+        formatar_numero(
+
+            faturas.loc[
+
+                faturas[
+                    "dia_saida"
+                ] == "Quinta-feira",
+
+                "quantidade",
+
+            ].sum(),
+
+            1,
+        ),
+    )
+
+    aba_quarta, aba_quinta, aba_todas = st.tabs(
+
         [
-            "Período atual",
-            "Período anterior",
-            "Histórico de vendas",
+            "Quarta-feira",
+            "Quinta-feira",
+            "Todas",
         ]
     )
 
-    configuracoes = [
+    configuracao_abas = [
+
         (
-            aba_atual,
-            "upload_atual",
-            "atual",
-            "Listagem atual",
+            aba_quarta,
+            "Quarta-feira",
         ),
 
         (
-            aba_anterior,
-            "upload_anterior",
-            "anterior",
-            "Listagem anterior",
+            aba_quinta,
+            "Quinta-feira",
         ),
 
         (
-            aba_historico,
-            "upload_historico",
-            "historico",
-            "Histórico de vendas",
+            aba_todas,
+            None,
         ),
     ]
 
-    for (
-        aba,
-        chave_upload,
-        chave_memoria,
-        titulo,
-    ) in configuracoes:
+    for aba, dia in configuracao_abas:
 
         with aba:
 
-            ficheiro = st.file_uploader(
-                f"{titulo} (.xlsx ou .csv)",
-                type=[
-                    "xlsx",
-                    "csv",
-                ],
-                key=chave_upload,
+            tabela = (
+
+                faturas
+
+                if dia is None
+
+                else faturas[
+
+                    faturas[
+                        "dia_saida"
+                    ] == dia
+                ]
             )
 
-            if ficheiro is not None:
+            st.dataframe(
 
-                try:
+                tabela,
 
-                    dados, cabecalho = ler_ficheiro(
-                        ficheiro
+                use_container_width=True,
+
+                hide_index=True,
+            )
+
+            if not tabela.empty:
+
+                resumo = (
+
+                    tabela.groupby(
+
+                        [
+                            "fornecedor",
+                            "referencia",
+                            "produto",
+                        ],
+
+                        as_index=False,
+
+                    )[
+                        "quantidade"
+                    ]
+
+                    .sum()
+
+                    .sort_values(
+
+                        "quantidade",
+
+                        ascending=False,
                     )
+                )
 
-                    st.session_state[
-                        chave_memoria
-                    ] = dados
+                st.subheader(
+                    "Resumo para preparação"
+                )
 
-                    st.success(
-                        f"Carregado: {ficheiro.name} · "
-                        f"{len(dados)} linhas · "
-                        f"cabeçalho na linha {cabecalho + 1}"
+                st.dataframe(
+
+                    resumo,
+
+                    use_container_width=True,
+
+                    hide_index=True,
+                )
+
+                nome_dia = (
+
+                    "todas"
+
+                    if dia is None
+
+                    else normalizar_texto(
+                        dia
+                    ).replace(
+                        " ",
+                        "_",
                     )
+                )
 
-                    st.caption(
-                        "Colunas reconhecidas: "
-                        + ", ".join(
-                            dados.columns.astype(str)
-                        )
-                    )
+                st.download_button(
 
-                    st.dataframe(
-                        dados.head(20),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
+                    "⬇️ Exportar preparação",
 
-                except Exception as erro:
+                    data=converter_para_excel(
 
-                    st.error(
-                        f"Não consegui ler o ficheiro: {erro}"
-                    )
+                        resumo,
 
-    if st.button(
-        "Limpar todos os dados desta sessão"
-    ):
+                        "Preparacao",
+                    ),
 
-        st.session_state.atual = None
-        st.session_state.anterior = None
-        st.session_state.historico = None
+                    file_name=(
 
-        st.rerun()
+                        f"faturas_"
+                        f"{nome_dia}_"
+                        f"{date.today().isoformat()}"
+                        f".xlsx"
+                    ),
+
+                    mime=(
+
+                        "application/vnd.openxmlformats-"
+                        "officedocument.spreadsheetml.sheet"
+                    ),
+
+                    key=(
+                        f"download_"
+                        f"{nome_dia}"
+                    ),
+                )
 
 
 # =========================================================
@@ -1084,17 +2500,18 @@ elif pagina == "📥 Importar dados":
 elif pagina == "📦 Encomendas":
 
     st.title(
-        "Sugestão de encomenda"
+        "Encomendas"
     )
 
-    st.warning(
-        "A fórmula atual é uma simulação inicial. "
-        "Valida sempre antes de encomendar."
+    fornecedor = st.selectbox(
+
+        "Fornecedor do pedido",
+
+        FORNECEDORES,
     )
 
     resultado, erro = calcular_encomendas(
-        st.session_state.atual,
-        st.session_state.anterior,
+        fornecedor
     )
 
     if erro:
@@ -1103,134 +2520,137 @@ elif pagina == "📦 Encomendas":
 
         st.stop()
 
-    mostrar_apenas = st.toggle(
-        "Mostrar apenas produtos a encomendar",
-        value=True,
-    )
+    if obter_inventario(
+        fornecedor,
+        "Anterior",
+    ) is None:
 
-    pesquisa = st.text_input(
-        "Pesquisar produto ou referência"
+        st.warning(
+            "Ainda não carregaste o período anterior. "
+            "A sugestão está a usar apenas o período atual."
+        )
+
+    apenas_encomendar = st.toggle(
+
+        "Mostrar apenas produtos a encomendar",
+
+        value=True,
     )
 
     tabela = resultado.copy()
 
-    if mostrar_apenas:
+    if apenas_encomendar:
 
         tabela = tabela[
-            tabela["sugestao"] > 0
+
+            tabela[
+                "sugestao"
+            ] > 0
         ]
-
-    if pesquisa:
-
-        pesquisa_normalizada = normalizar_texto(
-            pesquisa
-        )
-
-        mascara = (
-            tabela["produto"]
-            .astype(str)
-            .map(normalizar_texto)
-            .str.contains(
-                pesquisa_normalizada,
-                na=False,
-            )
-        )
-
-        if "referencia" in tabela.columns:
-
-            mascara = mascara | (
-                tabela["referencia"]
-                .astype(str)
-                .map(normalizar_texto)
-                .str.contains(
-                    pesquisa_normalizada,
-                    na=False,
-                )
-            )
-
-        tabela = tabela[
-            mascara
-        ]
-
-    produtos_encomendar = int(
-        (
-            resultado["sugestao"] > 0
-        ).sum()
-    )
-
-    quantidade_encomendar = resultado[
-        "sugestao"
-    ].sum()
-
-    produtos_sem_stock = int(
-        (
-            resultado["stock_atual"] <= 0
-        ).sum()
-    )
 
     coluna1, coluna2, coluna3 = st.columns(
         3
     )
 
     coluna1.metric(
+
         "Produtos a encomendar",
-        formatar_numero(
-            produtos_encomendar
+
+        int(
+
+            (
+                resultado[
+                    "sugestao"
+                ] > 0
+            ).sum()
         ),
     )
 
     coluna2.metric(
+
         "Quantidade sugerida",
+
         formatar_numero(
-            quantidade_encomendar
+
+            resultado[
+                "sugestao"
+            ].sum()
         ),
     )
 
     coluna3.metric(
-        "Stock ≤ 0",
-        formatar_numero(
-            produtos_sem_stock
+
+        "Stock PHC ≤ 0",
+
+        int(
+
+            (
+                resultado[
+                    "stock_phc"
+                ] <= 0
+            ).sum()
         ),
     )
 
-    colunas_visiveis = [
+    colunas = [
+
         coluna
+
         for coluna in [
+
             "referencia",
             "produto",
             "saidas_anterior",
             "saidas_atual",
             "variacao_pct",
-            "stock_atual",
+            "stock_phc",
             "procura_base",
             "stock_alvo",
             "sugestao",
             "motivo",
+
         ]
-        if coluna in tabela.columns
+
+        if coluna
+        in tabela.columns
     ]
 
     st.dataframe(
-        tabela[colunas_visiveis],
+
+        tabela[
+            colunas
+        ],
+
         use_container_width=True,
+
         hide_index=True,
     )
 
     st.download_button(
-        "⬇️ Exportar sugestão para Excel",
+
+        f"⬇️ Exportar pedido {fornecedor}",
 
         data=converter_para_excel(
-            tabela[colunas_visiveis]
+
+            tabela[
+                colunas
+            ],
+
+            f"Pedido {fornecedor}",
         ),
 
         file_name=(
-            f"inviora_encomenda_"
-            f"{date.today().isoformat()}.xlsx"
+
+            f"encomenda_"
+            f"{fornecedor}_"
+            f"{date.today().isoformat()}"
+            f".xlsx"
         ),
 
         mime=(
-            "application/vnd.openxmlformats-officedocument."
-            "spreadsheetml.sheet"
+
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
         ),
     )
 
@@ -1241,279 +2661,74 @@ elif pagina == "📦 Encomendas":
 
 elif pagina == "📈 Vendas":
 
-    st.title(
-        "Análise de vendas"
+    st.title("Vendas")
+
+    fornecedor = st.selectbox(
+
+        "Fornecedor",
+
+        [
+            "Todos",
+            *FORNECEDORES,
+        ],
     )
 
-    historico = st.session_state.historico
+    if fornecedor == "Todos":
 
-    atual = st.session_state.atual
-
-    anterior = st.session_state.anterior
-
-    if (
-        historico is not None
-        and "data" in historico.columns
-    ):
-
-        historico = garantir_produto(
-            historico
-        )
-
-        historico = historico.dropna(
-            subset=["data"]
-        ).copy()
-
-        metricas = {}
-
-        if "saidas" in historico.columns:
-
-            metricas[
-                "Quantidade vendida"
-            ] = "saidas"
-
-        if "valor_saidas" in historico.columns:
-
-            metricas[
-                "Valor de vendas"
-            ] = "valor_saidas"
-
-        if not metricas:
-
-            st.warning(
-                "O histórico precisa de uma coluna "
-                "Saídas ou Valor Saídas."
-            )
-
-            st.stop()
-
-        coluna1, coluna2 = st.columns(
-            2
-        )
-
-        periodo = coluna1.selectbox(
-            "Visualização",
-            [
-                "Semanal",
-                "Mensal",
-                "Trimestral",
-                "Semestral",
-                "Anual",
-            ],
-        )
-
-        nome_metrica = coluna2.selectbox(
-            "Métrica",
-            list(metricas.keys()),
-        )
-
-        metrica = metricas[
-            nome_metrica
-        ]
-
-        anos_disponiveis = sorted(
-            historico["data"]
-            .dt.year
-            .dropna()
-            .astype(int)
-            .unique()
-            .tolist()
-        )
-
-        anos = st.multiselect(
-            "Anos a comparar",
-            anos_disponiveis,
-
-            default=(
-                anos_disponiveis[-2:]
-                if len(anos_disponiveis) >= 2
-                else anos_disponiveis
-            ),
-        )
-
-        vendas = historico[
-            historico["data"]
-            .dt.year
-            .isin(anos)
-        ].copy()
-
-        if periodo == "Semanal":
-
-            vendas["periodo"] = (
-                vendas["data"]
-                .dt.isocalendar()
-                .week
-                .astype(int)
-            )
-
-        elif periodo == "Mensal":
-
-            vendas["periodo"] = (
-                vendas["data"].dt.month
-            )
-
-        elif periodo == "Trimestral":
-
-            vendas["periodo"] = (
-                vendas["data"].dt.quarter
-            )
-
-        elif periodo == "Semestral":
-
-            vendas["periodo"] = (
-                (
-                    vendas["data"].dt.month
-                    - 1
-                )
-                // 6
-                + 1
-            )
-
-        else:
-
-            vendas["periodo"] = 1
-
-        vendas["ano"] = (
-            vendas["data"]
-            .dt.year
-            .astype(str)
-        )
-
-        vendas_agrupadas = (
-            vendas.groupby(
-                [
-                    "ano",
-                    "periodo",
-                ],
-                as_index=False,
-            )[metrica]
-            .sum()
-            .sort_values(
-                [
-                    "ano",
-                    "periodo",
-                ]
-            )
-        )
-
-        grafico = px.line(
-            vendas_agrupadas,
-            x="periodo",
-            y=metrica,
-            color="ano",
-            markers=True,
-        )
-
-        st.plotly_chart(
-            grafico,
-            use_container_width=True,
-        )
-
-        st.subheader(
-            "Produtos mais vendidos"
-        )
-
-        ranking = (
-            vendas.groupby(
-                "produto",
-                as_index=False,
-            )[metrica]
-            .sum()
-            .nlargest(
-                20,
-                metrica,
-            )
-        )
-
-        st.dataframe(
-            ranking,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-    elif atual is not None:
-
-        st.info(
-            "O ficheiro atual não tem datas individuais. "
-            "Aqui comparamos o relatório atual com o anterior."
-        )
-
-        total_atual = (
-            atual["saidas"].sum()
-            if "saidas" in atual.columns
-            else 0
-        )
-
-        total_anterior = (
-            anterior["saidas"].sum()
-
-            if (
-                anterior is not None
-                and "saidas" in anterior.columns
-            )
-
-            else None
-        )
-
-        coluna1, coluna2, coluna3 = st.columns(
-            3
-        )
-
-        coluna1.metric(
-            "Saídas atuais",
-            formatar_numero(
-                total_atual,
-                1,
-            ),
-        )
-
-        coluna2.metric(
-            "Saídas anteriores",
-
-            (
-                formatar_numero(
-                    total_anterior,
-                    1,
-                )
-
-                if total_anterior is not None
-
-                else "—"
-            ),
-        )
-
-        variacao = (
-            (
-                (
-                    total_atual
-                    - total_anterior
-                )
-                / total_anterior
-            )
-            * 100
-
-            if total_anterior not in [
-                None,
-                0,
-            ]
-
-            else None
-        )
-
-        coluna3.metric(
-            "Variação",
-
-            (
-                f"{variacao:.1f}%"
-                if variacao is not None
-                else "—"
-            ),
+        atual = inventarios_carregados(
+            "Atual"
         )
 
     else:
 
+        atual = obter_inventario(
+
+            fornecedor,
+
+            "Atual",
+        )
+
+    if atual is None:
+
         st.info(
-            "Carrega dados para começar."
+            "Não existem dados carregados."
+        )
+
+        st.stop()
+
+    atual = garantir_produto(
+        atual
+    )
+
+    if "saidas" in atual.columns:
+
+        ranking = (
+
+            atual.groupby(
+
+                "produto",
+
+                as_index=False,
+
+            )[
+                "saidas"
+            ]
+
+            .sum()
+
+            .nlargest(
+                30,
+                "saidas",
+            )
+        )
+
+        st.dataframe(
+
+            ranking,
+
+            use_container_width=True,
+
+            hide_index=True,
         )
 
 
@@ -1525,21 +2740,51 @@ elif pagina == "📋 Produtos":
 
     st.title("Produtos")
 
-    atual = st.session_state.atual
+    fornecedor = st.selectbox(
+
+        "Fornecedor",
+
+        [
+            "Todos",
+            *FORNECEDORES,
+        ],
+    )
+
+    if fornecedor == "Todos":
+
+        atual = inventarios_carregados(
+            "Atual"
+        )
+
+    else:
+
+        atual = obter_inventario(
+
+            fornecedor,
+
+            "Atual",
+        )
+
+        if atual is not None:
+
+            atual = garantir_produto(
+                atual
+            )
+
+            atual[
+                "fornecedor"
+            ] = fornecedor
 
     if atual is None:
 
         st.info(
-            "Carrega primeiro a listagem atual."
+            "Não existem listagens carregadas."
         )
 
         st.stop()
 
-    atual = garantir_produto(
-        atual
-    )
-
     pesquisa = st.text_input(
+
         "Pesquisar produto ou referência"
     )
 
@@ -1552,11 +2797,21 @@ elif pagina == "📋 Produtos":
         )
 
         mascara = (
-            tabela["produto"]
+
+            tabela[
+                "produto"
+            ]
+
             .astype(str)
-            .map(normalizar_texto)
+
+            .map(
+                normalizar_texto
+            )
+
             .str.contains(
+
                 pesquisa_normalizada,
+
                 na=False,
             )
         )
@@ -1564,11 +2819,21 @@ elif pagina == "📋 Produtos":
         if "referencia" in tabela.columns:
 
             mascara = mascara | (
-                tabela["referencia"]
+
+                tabela[
+                    "referencia"
+                ]
+
                 .astype(str)
-                .map(normalizar_texto)
+
+                .map(
+                    normalizar_texto
+                )
+
                 .str.contains(
+
                     pesquisa_normalizada,
+
                     na=False,
                 )
             )
@@ -1578,161 +2843,18 @@ elif pagina == "📋 Produtos":
         ]
 
     st.caption(
+
         f"{len(tabela)} produtos encontrados"
     )
 
     st.dataframe(
+
         tabela,
+
         use_container_width=True,
+
         hide_index=True,
     )
-
-
-# =========================================================
-# ASSISTENTE
-# =========================================================
-
-elif pagina == "🧠 Assistente":
-
-    st.title(
-        "Assistente Inviora"
-    )
-
-    st.caption(
-        "Versão beta sem API externa."
-    )
-
-    atual = st.session_state.atual
-
-    if atual is None:
-
-        st.info(
-            "Carrega primeiro a listagem atual."
-        )
-
-        st.stop()
-
-    atual = garantir_produto(
-        atual
-    )
-
-    pergunta = st.selectbox(
-        "O que queres saber?",
-        [
-            "Resumo da operação",
-            "Produto com mais saídas",
-            "Produtos a encomendar",
-            "Produtos em risco",
-        ],
-    )
-
-    if pergunta == "Resumo da operação":
-
-        saidas = (
-            atual["saidas"].sum()
-            if "saidas" in atual.columns
-            else 0
-        )
-
-        stock = (
-            atual["stock_final"].sum()
-            if "stock_final" in atual.columns
-            else 0
-        )
-
-        risco = (
-            int(
-                (
-                    atual["stock_final"] <= 0
-                ).sum()
-            )
-
-            if "stock_final" in atual.columns
-
-            else 0
-        )
-
-        st.success(
-            f"Foram analisados **{len(atual)} produtos**. "
-            f"As saídas totalizam **{formatar_numero(saidas, 1)}**. "
-            f"O stock final é **{formatar_numero(stock, 1)}**. "
-            f"Existem **{risco} produtos em risco**."
-        )
-
-    elif pergunta == "Produto com mais saídas":
-
-        if "saidas" not in atual.columns:
-
-            st.warning(
-                "Não encontrei a coluna Saídas."
-            )
-
-        else:
-
-            ranking = (
-                atual.groupby(
-                    "produto",
-                    as_index=False,
-                )["saidas"]
-                .sum()
-                .sort_values(
-                    "saidas",
-                    ascending=False,
-                )
-            )
-
-            primeiro = ranking.iloc[0]
-
-            st.success(
-                f"O produto com mais saídas é "
-                f"**{primeiro['produto']}**, "
-                f"com **{formatar_numero(primeiro['saidas'], 1)}**."
-            )
-
-    elif pergunta == "Produtos a encomendar":
-
-        resultado, erro = calcular_encomendas(
-            atual,
-            st.session_state.anterior,
-        )
-
-        if erro:
-
-            st.info(erro)
-
-        else:
-
-            sugestoes = resultado[
-                resultado["sugestao"] > 0
-            ].head(10)
-
-            st.dataframe(
-                sugestoes,
-                use_container_width=True,
-                hide_index=True,
-            )
-
-    else:
-
-        if "stock_final" not in atual.columns:
-
-            st.warning(
-                "Não encontrei a coluna Stock Final."
-            )
-
-        else:
-
-            risco = atual[
-                atual["stock_final"] <= 0
-            ].sort_values(
-                "stock_final"
-            )
-
-            st.dataframe(
-                risco,
-                use_container_width=True,
-                hide_index=True,
-            )
 
 
 # =========================================================
@@ -1744,43 +2866,62 @@ else:
     st.title("Definições")
 
     st.session_state.cobertura = st.number_input(
+
         "Semanas de cobertura",
+
         min_value=0.1,
+
         max_value=12.0,
+
         value=float(
             st.session_state.cobertura
         ),
+
         step=0.1,
     )
 
     st.session_state.seguranca = st.slider(
+
         "Margem de segurança (%)",
+
         min_value=0,
+
         max_value=100,
+
         value=int(
             st.session_state.seguranca
         ),
+
         step=5,
     )
 
     st.session_state.multiplo = st.number_input(
-        "Arredondar encomendas para múltiplos de",
+
+        "Arredondar pedidos para múltiplos de",
+
         min_value=1,
+
         max_value=1000,
+
         value=int(
             st.session_state.multiplo
         ),
+
         step=1,
     )
 
     st.subheader(
-        "Fórmula atual"
+        "Regra de encomenda"
     )
 
     st.code(
+
         "Procura estimada = "
         "65% × saídas atuais + "
         "35% × saídas anteriores\n"
+
+        "Sem período anterior: "
+        "procura estimada = saídas atuais\n"
 
         "Stock alvo = "
         "procura estimada × cobertura × "
@@ -1788,13 +2929,12 @@ else:
 
         "Sugestão = "
         "máximo entre 0 e "
-        "(stock alvo - stock atual)",
+        "(stock alvo - stock PHC)",
+
         language="text",
     )
 
     st.warning(
-        "Esta fórmula é apenas um ponto de partida. "
-        "Antes de ser usada no trabalho precisamos "
-        "de considerar prazos de entrega, dias de encomenda, "
-        "mínimos, múltiplos de caixas, feriados e promoções."
+        "Esta regra ainda é experimental. "
+        "Não faças encomendas reais sem validar os resultados."
     )
