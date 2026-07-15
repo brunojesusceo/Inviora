@@ -2058,7 +2058,7 @@ with st.sidebar:
         "Navegação",
 
         [
-            "🏠 Hoje",
+            "🏠 Home",
             "📥 Importar inventário",
             "🧾 Faturas",
             "📅 Calendário",
@@ -2126,7 +2126,7 @@ else:
 # PÁGINA HOJE
 # =========================================================
 
-if pagina == "🏠 Hoje":
+if pagina == "🏠 Home":
 
     st.title(
         "Centro de Comando"
