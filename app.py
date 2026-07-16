@@ -4372,51 +4372,80 @@ elif pagina == "📥 Importar inventário":
                 f"{erro}"
             )
 
-    estado = []
+        estado = []
 
     for nome_fornecedor in FORNECEDORES:
 
         for nome_periodo in PERIODOS:
 
-            dados = obter_inventario(
+            for nome_dia in DIAS_SEMANA:
 
-                nome_fornecedor,
+                dados = obter_inventario(
+                    nome_fornecedor,
+                    nome_periodo,
+                    nome_dia,
+                )
 
-                nome_periodo,
-            )
-
-            estado.append(
-                {
-                    "Fornecedor":
+                ficheiro_guardado = (
+                    st.session_state
+                    .nomes_ficheiros
+                    .get(
                         nome_fornecedor,
-
-                    "Período":
+                        {}
+                    )
+                    .get(
                         nome_periodo,
+                        {}
+                    )
+                    .get(
+                        nome_dia
+                    )
+                )
 
-                    "Ficheiro":
-                        st.session_state
-                        .nomes_ficheiros[
-                            nome_fornecedor
-                        ][nome_periodo]
-                        or "Não carregado",
+                if (
+                    dados is not None
+                    or ficheiro_guardado
+                ):
 
-                    "Linhas":
-                        len(dados)
-                        if dados is not None
-                        else 0,
-                }
-            )
+                    estado.append(
+                        {
+                            "Fornecedor":
+                                nome_fornecedor,
 
-    st.dataframe(
+                            "Período":
+                                nome_periodo,
 
-        pd.DataFrame(
-            estado
-        ),
+                            "Dia":
+                                nome_dia,
 
-        use_container_width=True,
+                            "Ficheiro":
+                                ficheiro_guardado
+                                or "Sem nome",
 
-        hide_index=True,
-    )
+                            "Linhas":
+                                len(
+                                    dados
+                                )
+                                if dados is not None
+                                else 0,
+                        }
+                    )
+
+    if estado:
+
+        st.dataframe(
+            pd.DataFrame(
+                estado
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    else:
+
+        st.info(
+            "Ainda não existem listagens carregadas."
+        )
 
 
 # =========================================================
