@@ -1391,7 +1391,8 @@ def guardar_volta_db(
     )
 
     return True
-    def carregar_produtos_volta_db(codigo_volta):
+    
+def carregar_produtos_volta_db(codigo_volta):
 
     resposta = (
         supabase
