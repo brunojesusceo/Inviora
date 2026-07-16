@@ -5091,6 +5091,127 @@ elif pagina == "📦 Encomendas":
 # =========================================================
 # VENDAS
 # =========================================================
+elif pagina == "🚚 Voltas":
+
+    st.title("🚚 Voltas dos vendedores")
+
+    st.caption(
+        "Configure o vendedor responsável, "
+        "os dias habituais e o estado de cada volta."
+    )
+
+    try:
+        voltas_guardadas = carregar_voltas_db()
+
+    except Exception as erro:
+        st.error(
+            "Não foi possível carregar as voltas."
+        )
+        st.exception(erro)
+        st.stop()
+
+    mapa_voltas = {
+        str(registo.get("codigo")): registo
+        for registo in voltas_guardadas
+    }
+
+    for codigo_volta in VOLTAS:
+
+        registo_volta = mapa_voltas.get(
+            str(codigo_volta),
+            {}
+        )
+
+        vendedor_atual = (
+            registo_volta.get("vendedor")
+            or ""
+        )
+
+        dias_atuais = (
+            registo_volta.get("dias_semana")
+            or []
+        )
+
+        dias_atuais = [
+            dia
+            for dia in dias_atuais
+            if dia in DIAS_SEMANA
+        ]
+
+        ativa_atual = registo_volta.get(
+            "ativa",
+            True
+        )
+
+        estado_texto = (
+            "🟢 Ativa"
+            if ativa_atual
+            else "⚪ Inativa"
+        )
+
+        with st.expander(
+            f"Volta {codigo_volta} — {estado_texto}"
+        ):
+
+            with st.form(
+                key=f"form_volta_{codigo_volta}"
+            ):
+
+                vendedor = st.text_input(
+                    "Vendedor responsável",
+                    value=vendedor_atual,
+                    key=(
+                        f"vendedor_"
+                        f"{codigo_volta}"
+                    ),
+                )
+
+                dias_semana = st.multiselect(
+                    "Dias habituais da volta",
+                    options=DIAS_SEMANA,
+                    default=dias_atuais,
+                    key=(
+                        f"dias_volta_"
+                        f"{codigo_volta}"
+                    ),
+                )
+
+                ativa = st.checkbox(
+                    "Volta ativa",
+                    value=bool(ativa_atual),
+                    key=(
+                        f"ativa_volta_"
+                        f"{codigo_volta}"
+                    ),
+                )
+
+                guardar = st.form_submit_button(
+                    f"Guardar volta {codigo_volta}",
+                    use_container_width=True,
+                )
+
+            if guardar:
+
+                try:
+                    guardar_volta_db(
+                        codigo_volta,
+                        vendedor,
+                        dias_semana,
+                        ativa,
+                    )
+
+                    st.success(
+                        f"Volta {codigo_volta} guardada."
+                    )
+
+                    st.rerun()
+
+                except Exception as erro:
+                    st.error(
+                        "Não foi possível guardar "
+                        f"a volta {codigo_volta}."
+                    )
+                    st.exception(erro)
 
 elif pagina == "📈 Vendas":
 
