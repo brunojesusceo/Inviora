@@ -4427,21 +4427,39 @@ elif pagina == "📥 Importar inventário":
                     nome_dia,
                 )
 
-                ficheiro_guardado = (
-                    st.session_state
-                    .nomes_ficheiros
-                    .get(
+                                nomes_fornecedor = (
+                    st.session_state.nomes_ficheiros.get(
                         nome_fornecedor,
                         {}
                     )
-                    .get(
-                        nome_periodo,
-                        {}
-                    )
-                    .get(
+                )
+
+                if not isinstance(
+                    nomes_fornecedor,
+                    dict
+                ):
+                    nomes_fornecedor = {}
+
+                nomes_periodo = nomes_fornecedor.get(
+                    nome_periodo
+                )
+
+                if isinstance(
+                    nomes_periodo,
+                    dict
+                ):
+                    ficheiro_guardado = nomes_periodo.get(
                         nome_dia
                     )
-                )
+
+                elif isinstance(
+                    nomes_periodo,
+                    str
+                ):
+                    ficheiro_guardado = nomes_periodo
+
+                else:
+                    ficheiro_guardado = None
 
                 if (
                     dados is not None
