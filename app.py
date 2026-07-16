@@ -3433,7 +3433,102 @@ elif pagina == "🏠 Home":
             "🟢 Não existem compras urgentes "
             "com os dados atualmente carregados."
         )
+    # =====================================================
+    # GRÁFICO — NECESSIDADES POR FORNECEDOR
+    # =====================================================
 
+    dados_grafico_fornecedores = []
+
+    for fornecedor_grafico in FORNECEDORES:
+
+        resultado_grafico, erro_grafico = calcular_encomenda(
+            fornecedor_grafico
+        )
+
+        if erro_grafico is None:
+
+            artigos_encomendar_grafico = int(
+                (
+                    resultado_grafico[
+                        "sugestao"
+                    ] > 0
+                ).sum()
+            )
+
+            artigos_criticos_grafico = int(
+                (
+                    resultado_grafico[
+                        "autonomia_dias"
+                    ] < 1
+                ).sum()
+            )
+
+            dados_grafico_fornecedores.append(
+                {
+                    "Fornecedor": fornecedor_grafico,
+                    "Indicador": "Artigos a encomendar",
+                    "Quantidade": artigos_encomendar_grafico,
+                }
+            )
+
+            dados_grafico_fornecedores.append(
+                {
+                    "Fornecedor": fornecedor_grafico,
+                    "Indicador": "Artigos críticos",
+                    "Quantidade": artigos_criticos_grafico,
+                }
+            )
+
+    if dados_grafico_fornecedores:
+
+        st.subheader(
+            "Necessidades por fornecedor"
+        )
+
+        df_grafico_fornecedores = pd.DataFrame(
+            dados_grafico_fornecedores
+        )
+
+        grafico_fornecedores = px.bar(
+            df_grafico_fornecedores,
+            x="Fornecedor",
+            y="Quantidade",
+            color="Indicador",
+            barmode="group",
+            text_auto=True,
+        )
+
+        grafico_fornecedores.update_layout(
+            xaxis_title=None,
+            yaxis_title="Número de artigos",
+            legend_title=None,
+            margin=dict(
+                l=10,
+                r=10,
+                t=20,
+                b=10,
+            ),
+            height=380,
+        )
+
+        grafico_fornecedores.update_traces(
+            textposition="outside"
+        )
+
+        st.plotly_chart(
+            grafico_fornecedores,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,
+            },
+        )
+
+    else:
+
+        st.info(
+            "O gráfico ficará disponível quando existirem "
+            "inventários atuais carregados."
+        )
     st.divider()
     
     if faturas_db.empty:
