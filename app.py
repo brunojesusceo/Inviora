@@ -1,8 +1,16 @@
+import base64
+import hashlib
 import hmac
 import io
+import json
 import math
 import re
 import unicodedata
+import extra_streamlit_components as stx
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -135,6 +143,7 @@ SEGREDOS_OBRIGATORIOS = [
     "SUPABASE_URL",
     "SUPABASE_KEY",
     "APP_PASSWORD",
+    "AUTH_SECRET",
 ]
 
 segredos_em_falta = [
@@ -201,18 +210,139 @@ except Exception as erro:
 
 
 # =========================================================
-# LOGIN SIMPLES
+# LOGIN PERSISTENTE — 6 HORAS
 # =========================================================
+
+COOKIE_LOGIN = "inviora_login"
+HORAS_LOGIN = 6
+
+cookie_manager = stx.CookieManager()
+
+
+def criar_token_login():
+
+    expira_em = int(
+        (
+            datetime.now(TZ_PORTUGAL)
+            + timedelta(hours=HORAS_LOGIN)
+        ).timestamp()
+    )
+
+    payload = {
+        "exp": expira_em,
+        "app": "inviora",
+    }
+
+    payload_json = json.dumps(
+        payload,
+        separators=(",", ":"),
+    )
+
+    assinatura = hmac.new(
+        str(
+            st.secrets["AUTH_SECRET"]
+        ).encode("utf-8"),
+        payload_json.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+    conteudo = json.dumps(
+        {
+            "payload": payload,
+            "assinatura": assinatura,
+        },
+        separators=(",", ":"),
+    )
+
+    return base64.urlsafe_b64encode(
+        conteudo.encode("utf-8")
+    ).decode("utf-8")
+
+
+def validar_token_login(token):
+
+    if not token:
+
+        return False
+
+    try:
+
+        conteudo = base64.urlsafe_b64decode(
+            token.encode("utf-8")
+        ).decode("utf-8")
+
+        dados = json.loads(
+            conteudo
+        )
+
+        payload = dados["payload"]
+
+        assinatura_recebida = dados[
+            "assinatura"
+        ]
+
+        payload_json = json.dumps(
+            payload,
+            separators=(",", ":"),
+        )
+
+        assinatura_correta = hmac.new(
+            str(
+                st.secrets["AUTH_SECRET"]
+            ).encode("utf-8"),
+            payload_json.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        assinatura_valida = (
+            hmac.compare_digest(
+                assinatura_recebida,
+                assinatura_correta,
+            )
+        )
+
+        nao_expirou = (
+            int(payload["exp"])
+            > int(
+                datetime.now(
+                    TZ_PORTUGAL
+                ).timestamp()
+            )
+        )
+
+        return (
+            assinatura_valida
+            and nao_expirou
+            and payload.get("app")
+            == "inviora"
+        )
+
+    except Exception:
+
+        return False
+
+
+token_cookie = cookie_manager.get(
+    COOKIE_LOGIN
+)
 
 if "autenticado" not in st.session_state:
 
-    st.session_state.autenticado = False
+    st.session_state.autenticado = (
+        validar_token_login(
+            token_cookie
+        )
+    )
 
 
 if not st.session_state.autenticado:
 
     st.title(
         "🔒 Inviora"
+    )
+
+    st.caption(
+        "A sessão ficará ativa durante 6 horas."
     )
 
     password = st.text_input(
@@ -226,20 +356,37 @@ if not st.session_state.autenticado:
     ):
 
         password_correta = str(
-
             st.secrets[
                 "APP_PASSWORD"
             ]
         )
 
         if hmac.compare_digest(
-
             password,
-
             password_correta,
         ):
 
+            token = criar_token_login()
+
+            cookie_manager.set(
+                COOKIE_LOGIN,
+                token,
+                expires_at=(
+                    datetime.now(
+                        TZ_PORTUGAL
+                    )
+                    + timedelta(
+                        hours=HORAS_LOGIN
+                    )
+                ),
+                key="guardar_login_inviora",
+            )
+
             st.session_state.autenticado = True
+
+            st.success(
+                "Sessão iniciada."
+            )
 
             st.rerun()
 
@@ -311,6 +458,26 @@ if "multiplo" not in st.session_state:
 if "dias_listagem" not in st.session_state:
 
     st.session_state.dias_listagem = 7.0
+
+
+if "inventarios_recuperados" not in st.session_state:
+
+    try:
+
+        carregar_inventarios_db()
+
+        st.session_state.inventarios_recuperados = True
+
+    except Exception as erro:
+
+        st.warning(
+            "Não foi possível recuperar automaticamente "
+            "os inventários guardados."
+        )
+
+        st.exception(
+            erro
+        )
 
 
 # =========================================================
@@ -1020,6 +1187,163 @@ def juntar_inventarios(
         ignore_index=True,
 
         sort=False,
+    )
+
+def dataframe_para_json(
+    dados
+):
+
+    dados_limpos = dados.copy()
+
+    dados_limpos = dados_limpos.where(
+        pd.notna(
+            dados_limpos
+        ),
+        None,
+    )
+
+    return dados_limpos.to_dict(
+        orient="records"
+    )
+
+
+def guardar_inventario_db(
+    fornecedor,
+    periodo,
+    ficheiro_nome,
+    dados,
+):
+
+    registo = {
+        "fornecedor": fornecedor,
+        "periodo": periodo,
+        "ficheiro": ficheiro_nome,
+        "dados": dataframe_para_json(
+            dados
+        ),
+        "atualizado_em": (
+            datetime.now(
+                TZ_PORTUGAL
+            ).isoformat()
+        ),
+    }
+
+    (
+        supabase
+        .table(
+            "inventarios"
+        )
+        .upsert(
+            registo,
+            on_conflict=(
+                "fornecedor,periodo"
+            ),
+        )
+        .execute()
+    )
+
+
+def carregar_inventarios_db():
+
+    resposta = (
+        supabase
+        .table(
+            "inventarios"
+        )
+        .select(
+            "*"
+        )
+        .execute()
+    )
+
+    registos = (
+        resposta.data
+        or []
+    )
+
+    for registo in registos:
+
+        fornecedor = registo.get(
+            "fornecedor"
+        )
+
+        periodo = registo.get(
+            "periodo"
+        )
+
+        dados_json = registo.get(
+            "dados"
+        ) or []
+
+        if (
+            fornecedor
+            not in FORNECEDORES
+        ):
+
+            continue
+
+        if periodo not in PERIODOS:
+
+            continue
+
+        dados = pd.DataFrame(
+            dados_json
+        )
+
+        for coluna in [
+            "entradas",
+            "saidas",
+            "stock_final",
+        ]:
+
+            if coluna in dados.columns:
+
+                dados[coluna] = pd.to_numeric(
+                    dados[coluna],
+                    errors="coerce",
+                ).fillna(0)
+
+        if "referencia" in dados.columns:
+
+            dados[
+                "referencia"
+            ] = dados[
+                "referencia"
+            ].map(
+                normalizar_referencia
+            )
+
+        st.session_state.inventarios[
+            fornecedor
+        ][periodo] = dados
+
+        st.session_state.nomes_ficheiros[
+            fornecedor
+        ][periodo] = registo.get(
+            "ficheiro"
+        )
+guardar_inventario_db(
+    fornecedor,
+    periodo,
+    ficheiro.name,
+    dados,
+)
+
+
+
+def eliminar_inventarios_db():
+
+    (
+        supabase
+        .table(
+            "inventarios"
+        )
+        .delete()
+        .neq(
+            "id",
+            0,
+        )
+        .execute()
     )
 
 
@@ -2033,7 +2357,287 @@ def calcular_encomenda(
 
         None,
     )
+# =========================================================
+# ASSISTENTE INVIORA
+# =========================================================
 
+def construir_contexto_assistente():
+
+    contexto = {
+        "data": hoje_portugal().isoformat(),
+        "faturas_hoje": 0,
+        "unidades_hoje": 0,
+        "faturas_futuras": 0,
+        "linhas_sem_fornecedor": 0,
+        "fornecedores": {},
+    }
+
+    faturas = carregar_faturas_db()
+
+    if not faturas.empty:
+
+        hoje_df = faturas[
+            faturas[
+                "data_saida"
+            ] == hoje_portugal()
+        ]
+
+        futuras_df = faturas[
+            faturas[
+                "data_saida"
+            ] > hoje_portugal()
+        ]
+
+        contexto[
+            "faturas_hoje"
+        ] = int(
+            hoje_df[
+                "numero_fatura"
+            ].nunique()
+        )
+
+        contexto[
+            "unidades_hoje"
+        ] = float(
+            hoje_df[
+                "quantidade"
+            ].sum()
+        )
+
+        contexto[
+            "faturas_futuras"
+        ] = int(
+            futuras_df[
+                "numero_fatura"
+            ].nunique()
+        )
+
+        contexto[
+            "linhas_sem_fornecedor"
+        ] = int(
+            (
+                faturas[
+                    "fornecedor"
+                ]
+                == "Não identificado"
+            ).sum()
+        )
+
+    for fornecedor in FORNECEDORES:
+
+        resultado, erro = calcular_encomenda(
+            fornecedor
+        )
+
+        if erro:
+
+            contexto[
+                "fornecedores"
+            ][fornecedor] = {
+                "disponivel": False,
+                "erro": erro,
+            }
+
+            continue
+
+        autonomias = resultado.loc[
+            resultado[
+                "autonomia_dias"
+            ] < 999,
+            "autonomia_dias",
+        ]
+
+        contexto[
+            "fornecedores"
+        ][fornecedor] = {
+            "disponivel": True,
+            "artigos_encomendar": int(
+                (
+                    resultado[
+                        "sugestao"
+                    ] > 0
+                ).sum()
+            ),
+            "quantidade_sugerida": int(
+                resultado[
+                    "sugestao"
+                ].sum()
+            ),
+            "artigos_criticos": int(
+                (
+                    resultado[
+                        "autonomia_dias"
+                    ] < 1
+                ).sum()
+            ),
+            "artigos_amanha": int(
+                (
+                    (
+                        resultado[
+                            "autonomia_dias"
+                        ] >= 1
+                    )
+                    &
+                    (
+                        resultado[
+                            "autonomia_dias"
+                        ] < 2
+                    )
+                ).sum()
+            ),
+            "autonomia_media": float(
+                autonomias.mean()
+                if not autonomias.empty
+                else 0
+            ),
+        }
+
+    return contexto
+
+
+def resposta_regras(
+    contexto
+):
+
+    linhas = []
+
+    if contexto[
+        "faturas_hoje"
+    ]:
+
+        linhas.append(
+            f"Hoje saem "
+            f"{contexto['faturas_hoje']} faturas, "
+            f"com {formatar_numero(contexto['unidades_hoje'], 1)} "
+            f"unidades."
+        )
+
+    else:
+
+        linhas.append(
+            "Hoje não existem faturas agendadas para saída."
+        )
+
+    for fornecedor, dados in contexto[
+        "fornecedores"
+    ].items():
+
+        if not dados.get(
+            "disponivel"
+        ):
+
+            linhas.append(
+                f"{fornecedor}: "
+                f"{dados['erro']}"
+            )
+
+            continue
+
+        if dados[
+            "artigos_encomendar"
+        ] > 0:
+
+            linhas.append(
+                f"{fornecedor}: encomendar "
+                f"{dados['artigos_encomendar']} artigos, "
+                f"num total sugerido de "
+                f"{dados['quantidade_sugerida']} unidades."
+            )
+
+        else:
+
+            linhas.append(
+                f"{fornecedor}: não é necessário "
+                f"encomendar com os dados atuais."
+            )
+
+        if dados[
+            "artigos_criticos"
+        ] > 0:
+
+            linhas.append(
+                f"{fornecedor}: "
+                f"{dados['artigos_criticos']} artigos "
+                f"têm menos de um dia de autonomia."
+            )
+
+    if contexto[
+        "linhas_sem_fornecedor"
+    ] > 0:
+
+        linhas.append(
+            f"Existem "
+            f"{contexto['linhas_sem_fornecedor']} linhas "
+            f"sem fornecedor identificado."
+        )
+
+    return "\n\n".join(
+        linhas
+    )
+
+
+def resposta_openai(
+    pergunta,
+    contexto,
+):
+
+    api_key = st.secrets.get(
+        "OPENAI_API_KEY",
+        "",
+    )
+
+    if (
+        not api_key
+        or OpenAI is None
+    ):
+
+        return resposta_regras(
+            contexto
+        )
+
+    cliente = OpenAI(
+        api_key=api_key
+    )
+
+    instrucoes = """
+És o Assistente Inviora, um copiloto de compras e stock.
+Responde sempre em português de Portugal.
+Usa apenas os dados fornecidos.
+Não inventes produtos, valores, datas ou causas.
+Quando faltarem dados, diz claramente que faltam dados.
+Dá recomendações curtas, práticas e prudentes.
+Nunca digas que uma encomenda deve ser enviada sem revisão humana.
+"""
+
+    conteudo = {
+        "pergunta": pergunta,
+        "dados_inviora": contexto,
+    }
+
+    try:
+
+        resposta = cliente.responses.create(
+            model="gpt-4.1-mini",
+            instructions=instrucoes,
+            input=json.dumps(
+                conteudo,
+                ensure_ascii=False,
+            ),
+            store=False,
+        )
+
+        return resposta.output_text
+
+    except Exception:
+
+        return (
+            resposta_regras(
+                contexto
+            )
+            + "\n\n"
+            + "A resposta em linguagem natural não ficou "
+            + "disponível; usei o modo seguro por regras."
+        )
 
 # =========================================================
 # MENU
@@ -2058,8 +2662,10 @@ with st.sidebar:
         "Navegação",
 
         [
-            "🏠 Home",
-            "📥 Importar inventário",
+            [
+    "🏠 Home",
+    "🧠 Assistente",
+    "📥 Importar inventário",
             "🧾 Faturas",
             "📅 Calendário",
             "📦 Encomendas",
@@ -2087,12 +2693,17 @@ with st.sidebar:
     )
 
     if st.button(
-        "Terminar sessão"
-    ):
+    "Terminar sessão"
+):
 
-        st.session_state.autenticado = False
+    cookie_manager.delete(
+        COOKIE_LOGIN,
+        key="apagar_login_inviora",
+    )
 
-        st.rerun()
+    st.session_state.autenticado = False
+
+    st.rerun()
 
 
 faturas_db = carregar_faturas_db()
@@ -2341,7 +2952,106 @@ if pagina == "🏠 Home":
         st.success(
             "Não existem faturas agendadas para hoje."
         )
+# =========================================================
+# ASSISTENTE
+# =========================================================
 
+elif pagina == "🧠 Assistente":
+
+    st.title(
+        "🧠 Assistente Inviora"
+    )
+
+    st.caption(
+        "Analisa inventários, encomendas e faturas "
+        "sem enviar PDFs completos para a IA."
+    )
+
+    contexto = construir_contexto_assistente()
+
+    st.subheader(
+        "Briefing diário"
+    )
+
+    briefing = resposta_openai(
+        "Cria um briefing operacional curto para hoje.",
+        contexto,
+    )
+
+    st.info(
+        briefing
+    )
+
+    st.subheader(
+        "Perguntar à Inviora"
+    )
+
+    pergunta = st.text_input(
+        "Pergunta",
+        placeholder=(
+            "Ex.: Posso adiar a Tabaqueira?"
+        ),
+    )
+
+    coluna1, coluna2, coluna3 = st.columns(
+        3
+    )
+
+    with coluna1:
+
+        perguntar_criticos = st.button(
+            "O que é crítico?",
+            use_container_width=True,
+        )
+
+    with coluna2:
+
+        perguntar_logista = st.button(
+            "Posso adiar Logista?",
+            use_container_width=True,
+        )
+
+    with coluna3:
+
+        perguntar_tabaqueira = st.button(
+            "Posso adiar Tabaqueira?",
+            use_container_width=True,
+        )
+
+    pergunta_final = pergunta
+
+    if perguntar_criticos:
+
+        pergunta_final = (
+            "Quais são as prioridades e riscos críticos?"
+        )
+
+    elif perguntar_logista:
+
+        pergunta_final = (
+            "Posso adiar a encomenda da Logista?"
+        )
+
+    elif perguntar_tabaqueira:
+
+        pergunta_final = (
+            "Posso adiar a encomenda da Tabaqueira?"
+        )
+
+    if pergunta_final:
+
+        with st.spinner(
+            "A analisar..."
+        ):
+
+            resposta = resposta_openai(
+                pergunta_final,
+                contexto,
+            )
+
+        st.success(
+            resposta
+        )
 
 # =========================================================
 # IMPORTAÇÃO
