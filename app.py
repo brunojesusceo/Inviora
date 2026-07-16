@@ -2661,7 +2661,7 @@ with st.sidebar:
 
         "Navegação",
 
-        [
+    
             [
     "🏠 Home",
     "🧠 Assistente",
