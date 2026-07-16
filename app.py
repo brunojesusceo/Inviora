@@ -2627,6 +2627,54 @@ Nunca digas que uma encomenda deve ser enviada sem revisão humana.
             + "A resposta em linguagem natural não ficou "
             + "disponível; usei o modo seguro por regras."
         )
+        # =========================================================
+# ADMINISTRAÇÃO — ELIMINAR DADOS
+# =========================================================
+
+def eliminar_inventario_db(
+    fornecedor,
+    periodo,
+):
+
+    (
+        supabase
+        .table("inventarios")
+        .delete()
+        .eq("fornecedor", fornecedor)
+        .eq("periodo", periodo)
+        .execute()
+    )
+
+    st.session_state.inventarios[
+        fornecedor
+    ][periodo] = None
+
+    st.session_state.nomes_ficheiros[
+        fornecedor
+    ][periodo] = None
+
+
+def eliminar_fatura_db(
+    fatura_id,
+):
+
+    # Primeiro elimina as linhas da fatura.
+    (
+        supabase
+        .table("fatura_linhas")
+        .delete()
+        .eq("fatura_id", int(fatura_id))
+        .execute()
+    )
+
+    # Depois elimina o cabeçalho da fatura.
+    (
+        supabase
+        .table("faturas")
+        .delete()
+        .eq("id", int(fatura_id))
+        .execute()
+    )
 
 # =========================================================
 # MENU
@@ -2646,17 +2694,20 @@ with st.sidebar:
 
     pagina = st.radio(
         "Navegação",
-        [
-            "🏠 Home",
-            "🤖 Assistente",
-            "📥 Importar inventário",
-            "🧾 Faturas",
-            "📅 Calendário",
-            "📦 Encomendas",
-            "📈 Vendas",
-            "📋 Produtos",
-            "⚙️ Definições",
-        ],
+        
+            [
+    "🏠 Home",
+    "🧠 Assistente",
+    "📥 Importar inventário",
+    "🧾 Faturas",
+    "📅 Calendário",
+    "📦 Encomendas",
+    "📈 Vendas",
+    "📋 Produtos",
+    "🛠️ Administração",
+    "⚙️ Definições",
+]
+        ,
         label_visibility="collapsed",
     )
 
@@ -2706,7 +2757,255 @@ else:
 # PÁGINA HOJE
 # =========================================================
 
-if pagina == "🏠 Home":
+if pagina == "🛠️ Administração":
+
+    st.title(
+        "🛠️ Administração"
+    )
+
+    st.warning(
+        "Os dados apagados nesta página são removidos "
+        "permanentemente do Supabase."
+    )
+
+    aba_inventarios, aba_faturas = st.tabs(
+        [
+            "📥 Inventários",
+            "🧾 Faturas",
+        ]
+    )
+
+    # =====================================================
+    # APAGAR INVENTÁRIOS
+    # =====================================================
+
+    with aba_inventarios:
+
+        st.subheader(
+            "Apagar uma listagem"
+        )
+
+        opcoes_inventarios = []
+
+        for fornecedor in FORNECEDORES:
+
+            for periodo in PERIODOS:
+
+                dados = st.session_state.inventarios[
+                    fornecedor
+                ][periodo]
+
+                ficheiro = (
+                    st.session_state
+                    .nomes_ficheiros[
+                        fornecedor
+                    ][periodo]
+                )
+
+                if dados is not None:
+
+                    opcoes_inventarios.append(
+                        {
+                            "fornecedor": fornecedor,
+                            "periodo": periodo,
+                            "ficheiro": (
+                                ficheiro
+                                or "Sem nome"
+                            ),
+                            "linhas": len(dados),
+                        }
+                    )
+
+        if not opcoes_inventarios:
+
+            st.info(
+                "Não existem inventários guardados."
+            )
+
+        else:
+
+            etiquetas_inventarios = {
+                (
+                    f"{item['fornecedor']} — "
+                    f"{item['periodo']} — "
+                    f"{item['ficheiro']} "
+                    f"({item['linhas']} linhas)"
+                ): item
+                for item in opcoes_inventarios
+            }
+
+            inventario_escolhido = st.selectbox(
+                "Escolher inventário",
+                list(
+                    etiquetas_inventarios.keys()
+                ),
+            )
+
+            inventario = etiquetas_inventarios[
+                inventario_escolhido
+            ]
+
+            confirmar_inventario = st.checkbox(
+                (
+                    "Confirmo que quero apagar "
+                    f"{inventario['fornecedor']} — "
+                    f"{inventario['periodo']}"
+                ),
+                key="confirmar_apagar_inventario",
+            )
+
+            if st.button(
+                "🗑️ Apagar inventário",
+                type="primary",
+                disabled=not confirmar_inventario,
+                use_container_width=True,
+            ):
+
+                try:
+
+                    eliminar_inventario_db(
+                        inventario[
+                            "fornecedor"
+                        ],
+                        inventario[
+                            "periodo"
+                        ],
+                    )
+
+                    st.success(
+                        "Inventário apagado."
+                    )
+
+                    st.rerun()
+
+                except Exception as erro:
+
+                    st.error(
+                        "Não foi possível apagar "
+                        "o inventário."
+                    )
+
+                    st.exception(
+                        erro
+                    )
+
+    # =====================================================
+    # APAGAR FATURAS
+    # =====================================================
+
+    with aba_faturas:
+
+        st.subheader(
+            "Apagar uma fatura"
+        )
+
+        faturas_admin = carregar_faturas_db()
+
+        if faturas_admin.empty:
+
+            st.info(
+                "Não existem faturas guardadas."
+            )
+
+        else:
+
+            faturas_unicas = (
+                faturas_admin[
+                    [
+                        "fatura_id",
+                        "numero_fatura",
+                        "data_fatura",
+                        "data_saida",
+                        "ficheiro",
+                    ]
+                ]
+                .drop_duplicates(
+                    subset=["fatura_id"]
+                )
+                .sort_values(
+                    "data_saida",
+                    ascending=False,
+                )
+            )
+
+            etiquetas_faturas = {}
+
+            for _, linha in (
+                faturas_unicas.iterrows()
+            ):
+
+                data_saida_texto = (
+                    linha["data_saida"]
+                    .strftime("%d/%m/%Y")
+                    if isinstance(
+                        linha["data_saida"],
+                        date,
+                    )
+                    else "Sem data"
+                )
+
+                etiqueta = (
+                    f"Fatura "
+                    f"{linha['numero_fatura']} — "
+                    f"saída {data_saida_texto} — "
+                    f"{linha['ficheiro']}"
+                )
+
+                etiquetas_faturas[
+                    etiqueta
+                ] = int(
+                    linha["fatura_id"]
+                )
+
+            fatura_escolhida = st.selectbox(
+                "Escolher fatura",
+                list(
+                    etiquetas_faturas.keys()
+                ),
+            )
+
+            confirmar_fatura = st.checkbox(
+                (
+                    "Confirmo que quero apagar "
+                    "esta fatura e todos os seus artigos"
+                ),
+                key="confirmar_apagar_fatura",
+            )
+
+            if st.button(
+                "🗑️ Apagar fatura",
+                type="primary",
+                disabled=not confirmar_fatura,
+                use_container_width=True,
+            ):
+
+                try:
+
+                    eliminar_fatura_db(
+                        etiquetas_faturas[
+                            fatura_escolhida
+                        ]
+                    )
+
+                    st.success(
+                        "Fatura apagada."
+                    )
+
+                    st.rerun()
+
+                except Exception as erro:
+
+                    st.error(
+                        "Não foi possível apagar "
+                        "a fatura."
+                    )
+
+                    st.exception(
+                        erro
+                    )
+
+
+elif pagina == "🏠 Home":
 
     st.title(
         "Centro de Comando"
