@@ -2651,21 +2651,16 @@ with st.sidebar:
     )
 
     st.markdown(
-        '<div class="tagline">'
-        'Transformar dados em decisões.'
-        '</div>',
+        '<div class="tagline">Transformar dados em decisões.</div>',
         unsafe_allow_html=True,
     )
 
     pagina = st.radio(
-
         "Navegação",
-
-    
-            [
-    "🏠 Home",
-    "🧠 Assistente",
-    "📥 Importar inventário",
+        [
+            "🏠 Home",
+            "🤖 Assistente",
+            "📥 Importar inventário",
             "🧾 Faturas",
             "📅 Calendário",
             "📦 Encomendas",
@@ -2673,32 +2668,22 @@ with st.sidebar:
             "📋 Produtos",
             "⚙️ Definições",
         ],
-
         label_visibility="collapsed",
     )
 
     st.divider()
 
-    st.caption(
-        f"Hoje: "
-        f"{hoje_portugal().strftime('%d/%m/%Y')}"
-    )
+    st.caption(f"Hoje: {hoje_portugal().strftime('%d/%m/%Y')}")
+    st.caption("🟢 Supabase ligado")
+    st.caption("Inviora v0.6.0")
 
-    st.caption(
-        "🟢 Supabase ligado"
-    )
-
-    st.caption(
-        "Inviora v0.6.0"
-    )
-
-  if st.button("Terminar sessão"):
-    cookie_manager.delete(
-        COOKIE_LOGIN,
-        key="apagar_login_inviora",
-    )
-    st.session_state.autenticado = False
-    st.rerun()
+    if st.button("Terminar sessão"):
+        cookie_manager.delete(
+            COOKIE_LOGIN,
+            key="apagar_login_inviora",
+        )
+        st.session_state.autenticado = False
+        st.rerun()
 
 
 faturas_db = carregar_faturas_db()
