@@ -1391,6 +1391,86 @@ def guardar_volta_db(
     )
 
     return True
+    def carregar_produtos_volta_db(codigo_volta):
+
+    resposta = (
+        supabase
+        .table("volta_produtos")
+        .select("*")
+        .eq(
+            "volta_codigo",
+            str(codigo_volta),
+        )
+        .order("referencia")
+        .execute()
+    )
+
+    return resposta.data or []
+
+
+def substituir_produtos_volta_db(
+    codigo_volta,
+    dados,
+):
+
+    codigo_volta = str(codigo_volta)
+
+    (
+        supabase
+        .table("volta_produtos")
+        .delete()
+        .eq(
+            "volta_codigo",
+            codigo_volta,
+        )
+        .execute()
+    )
+
+    registos = []
+
+    for _, linha in dados.iterrows():
+
+        referencia = str(
+            linha.get("referencia", "")
+        ).strip()
+
+        produto = str(
+            linha.get("produto", "")
+        ).strip()
+
+        quantidade = pd.to_numeric(
+            linha.get("quantidade", 0),
+            errors="coerce",
+        )
+
+        if not referencia:
+            continue
+
+        if pd.isna(quantidade):
+            quantidade = 0
+
+        registos.append(
+            {
+                "volta_codigo": codigo_volta,
+                "referencia": referencia,
+                "produto": produto or None,
+                "quantidade": float(quantidade),
+                "atualizado_em": datetime.now(
+                    TZ_PORTUGAL
+                ).isoformat(),
+            }
+        )
+
+    if registos:
+
+        (
+            supabase
+            .table("volta_produtos")
+            .insert(registos)
+            .execute()
+        )
+
+    return len(registos)
 
 
 def guardar_inventario_db(
@@ -5212,6 +5292,145 @@ elif pagina == "🚚 Voltas":
                         f"a volta {codigo_volta}."
                     )
                     st.exception(erro)
+             st.divider()
+
+             st.subheader(
+                "Produtos e quantidades"
+            )
+
+            produtos_guardados = (
+                carregar_produtos_volta_db(
+                    codigo_volta
+                )
+            )
+
+            if produtos_guardados:
+
+                tabela_produtos = pd.DataFrame(
+                    produtos_guardados
+                )
+
+                colunas_mostrar = [
+                    coluna
+                    for coluna in [
+                        "referencia",
+                        "produto",
+                        "quantidade",
+                    ]
+                    if coluna in tabela_produtos.columns
+                ]
+
+                st.dataframe(
+                    tabela_produtos[
+                        colunas_mostrar
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            else:
+
+                st.info(
+                    "Ainda não existem produtos "
+                    f"associados à volta {codigo_volta}."
+                )
+
+            ficheiro_volta = st.file_uploader(
+                "Carregar lista da volta",
+                type=[
+                    "xlsx",
+                    "csv",
+                ],
+                key=(
+                    f"upload_produtos_volta_"
+                    f"{codigo_volta}"
+                ),
+            )
+
+            if ficheiro_volta is not None:
+
+                try:
+
+                    dados_volta, _ = (
+                        ler_ficheiro_tabular(
+                            ficheiro_volta
+                        )
+                    )
+
+                    dados_volta.columns = [
+                        normalizar_texto(
+                            coluna
+                        ).replace(
+                            " ",
+                            "_",
+                        )
+                        for coluna in dados_volta.columns
+                    ]
+
+                    colunas_obrigatorias = {
+                        "referencia",
+                        "quantidade",
+                    }
+
+                    if not colunas_obrigatorias.issubset(
+                        dados_volta.columns
+                    ):
+
+                        st.error(
+                            "O ficheiro precisa das colunas "
+                            "'referencia' e 'quantidade'. "
+                            "A coluna 'produto' é opcional."
+                        )
+
+                    else:
+
+                        if "produto" not in dados_volta.columns:
+                            dados_volta["produto"] = ""
+
+                        st.dataframe(
+                            dados_volta[
+                                [
+                                    "referencia",
+                                    "produto",
+                                    "quantidade",
+                                ]
+                            ],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                        if st.button(
+                            f"Guardar produtos da volta {codigo_volta}",
+                            key=(
+                                f"guardar_produtos_"
+                                f"{codigo_volta}"
+                            ),
+                            use_container_width=True,
+                        ):
+
+                            total_guardado = (
+                                substituir_produtos_volta_db(
+                                    codigo_volta,
+                                    dados_volta,
+                                )
+                            )
+
+                            st.success(
+                                f"{total_guardado} produtos "
+                                f"guardados na volta {codigo_volta}."
+                            )
+
+                            st.rerun()
+
+                except Exception as erro:
+
+                    st.error(
+                        "Não foi possível ler ou guardar "
+                        "a lista da volta."
+                    )
+
+                    st.exception(erro)
+
 
 elif pagina == "📈 Vendas":
 
