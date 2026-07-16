@@ -3215,7 +3215,168 @@ elif pagina == "🏠 Home":
             "%d/%m/%Y · %H:%M"
         )
     )
+    # =====================================================
+    # RESUMO EXECUTIVO
+    # =====================================================
 
+    inventarios_carregados = 0
+    total_linhas_inventario = 0
+    ultima_atualizacao_texto = "Sem dados"
+
+    for fornecedor_resumo in FORNECEDORES:
+
+        for periodo_resumo in PERIODOS:
+
+            dados_resumo = obter_inventario(
+                fornecedor_resumo,
+                periodo_resumo,
+            )
+
+            if dados_resumo is not None:
+
+                inventarios_carregados += 1
+                total_linhas_inventario += len(
+                    dados_resumo
+                )
+
+    total_artigos_encomendar = 0
+    total_quantidade_sugerida = 0
+    total_artigos_criticos = 0
+
+    for fornecedor_resumo in FORNECEDORES:
+
+        resultado_resumo, erro_resumo = calcular_encomenda(
+            fornecedor_resumo
+        )
+
+        if erro_resumo is None:
+
+            total_artigos_encomendar += int(
+                (
+                    resultado_resumo[
+                        "sugestao"
+                    ] > 0
+                ).sum()
+            )
+
+            total_quantidade_sugerida += int(
+                resultado_resumo[
+                    "sugestao"
+                ].sum()
+            )
+
+            total_artigos_criticos += int(
+                (
+                    resultado_resumo[
+                        "autonomia_dias"
+                    ] < 1
+                ).sum()
+            )
+
+    if not faturas_db.empty:
+
+        faturas_futuras_resumo = faturas_db[
+            faturas_db[
+                "data_saida"
+            ] > hoje_portugal()
+        ]
+
+        numero_faturas_futuras = int(
+            faturas_futuras_resumo[
+                "numero_fatura"
+            ].nunique()
+        )
+
+    else:
+
+        numero_faturas_futuras = 0
+
+    st.subheader(
+        "Resumo executivo"
+    )
+
+    resumo1, resumo2, resumo3, resumo4 = st.columns(
+        4
+    )
+
+    resumo1.metric(
+        "Inventários ativos",
+        f"{inventarios_carregados}/4",
+        help=(
+            "Logista e Tabaqueira, "
+            "período atual e anterior."
+        ),
+    )
+
+    resumo2.metric(
+        "Artigos a encomendar",
+        total_artigos_encomendar,
+        delta=(
+            f"{total_quantidade_sugerida} unidades"
+        ),
+        delta_color="off",
+    )
+
+    resumo3.metric(
+        "Artigos críticos",
+        total_artigos_criticos,
+        help=(
+            "Produtos com menos de um dia "
+            "de autonomia."
+        ),
+    )
+
+    resumo4.metric(
+        "Faturas futuras",
+        numero_faturas_futuras,
+    )
+
+    if inventarios_carregados == 4:
+
+        st.success(
+            "✅ Todos os inventários necessários "
+            "estão carregados e disponíveis."
+        )
+
+    elif inventarios_carregados > 0:
+
+        st.warning(
+            f"⚠️ Existem apenas "
+            f"{inventarios_carregados} de 4 "
+            f"inventários carregados."
+        )
+
+    else:
+
+        st.error(
+            "❌ Ainda não existem inventários carregados."
+        )
+
+    if total_artigos_criticos > 0:
+
+        st.error(
+            f"🚨 Atenção imediata: "
+            f"{total_artigos_criticos} artigos "
+            f"têm menos de um dia de autonomia."
+        )
+
+    elif total_artigos_encomendar > 0:
+
+        st.info(
+            f"📦 Existem "
+            f"{total_artigos_encomendar} artigos "
+            f"com sugestão de encomenda."
+        )
+
+    else:
+
+        st.success(
+            "🟢 Não existem compras urgentes "
+            "com os dados atualmente carregados."
+        )
+
+    st.divider()
+    
     if faturas_db.empty:
 
         faturas_hoje = (
