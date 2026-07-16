@@ -460,24 +460,7 @@ if "dias_listagem" not in st.session_state:
     st.session_state.dias_listagem = 7.0
 
 
-if "inventarios_recuperados" not in st.session_state:
 
-    try:
-
-        carregar_inventarios_db()
-
-        st.session_state.inventarios_recuperados = True
-
-    except Exception as erro:
-
-        st.warning(
-            "Não foi possível recuperar automaticamente "
-            "os inventários guardados."
-        )
-
-        st.exception(
-            erro
-        )
 
 
 # =========================================================
@@ -1328,6 +1311,26 @@ guardar_inventario_db(
     ficheiro.name,
     dados,
 )
+
+
+if "inventarios_recuperados" not in st.session_state:
+
+    try:
+
+        carregar_inventarios_db()
+
+        st.session_state.inventarios_recuperados = True
+
+    except Exception as erro:
+
+        st.warning(
+            "Não foi possível recuperar automaticamente "
+            "os inventários guardados."
+        )
+
+        st.exception(
+            erro
+        )
 
 
 
