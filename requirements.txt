@@ -4,3 +4,5 @@ openpyxl
 plotly
 pypdf
 supabase
+extra-streamlit-components
+openai
