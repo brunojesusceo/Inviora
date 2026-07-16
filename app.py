@@ -3529,6 +3529,123 @@ elif pagina == "🏠 Home":
             "O gráfico ficará disponível quando existirem "
             "inventários atuais carregados."
         )
+            # =====================================================
+    # BRIEFING OPERACIONAL DO DIA
+    # =====================================================
+
+    faturas_saida_hoje_briefing = 0
+    unidades_saida_hoje_briefing = 0
+
+    if not faturas_db.empty:
+
+        faturas_hoje_briefing = faturas_db[
+            faturas_db[
+                "data_saida"
+            ] == hoje_portugal()
+        ]
+
+        faturas_saida_hoje_briefing = int(
+            faturas_hoje_briefing[
+                "numero_fatura"
+            ].nunique()
+        )
+
+        unidades_saida_hoje_briefing = float(
+            faturas_hoje_briefing[
+                "quantidade"
+            ].sum()
+        )
+
+    briefing_prioridades = []
+
+    if total_artigos_criticos > 0:
+
+        briefing_prioridades.append(
+            (
+                "🔴 Prioridade máxima: "
+                f"{total_artigos_criticos} artigos "
+                "têm menos de um dia de autonomia."
+            )
+        )
+
+    if total_artigos_encomendar > 0:
+
+        briefing_prioridades.append(
+            (
+                "📦 Preparar encomendas para "
+                f"{total_artigos_encomendar} artigos, "
+                f"num total sugerido de "
+                f"{total_quantidade_sugerida} unidades."
+            )
+        )
+
+    if faturas_saida_hoje_briefing > 0:
+
+        briefing_prioridades.append(
+            (
+                "🚚 Hoje saem "
+                f"{faturas_saida_hoje_briefing} faturas, "
+                f"representando "
+                f"{formatar_numero(unidades_saida_hoje_briefing, 1)} "
+                "unidades."
+            )
+        )
+
+    if inventarios_em_falta:
+
+        briefing_prioridades.append(
+            (
+                "⚠️ Completar os inventários em falta: "
+                + ", ".join(
+                    inventarios_em_falta
+                )
+                + "."
+            )
+        )
+
+    if numero_faturas_futuras > 0:
+
+        briefing_prioridades.append(
+            (
+                "📅 Existem "
+                f"{numero_faturas_futuras} faturas "
+                "agendadas para datas futuras."
+            )
+        )
+
+    if not briefing_prioridades:
+
+        briefing_prioridades.append(
+            (
+                "🟢 Operação estável: "
+                "não existem tarefas urgentes "
+                "com os dados atualmente disponíveis."
+            )
+        )
+
+    st.subheader(
+        "Briefing operacional"
+    )
+
+    with st.container(
+        border=True
+    ):
+
+        st.markdown(
+            f"**Resumo de "
+            f"{hoje_portugal().strftime('%d/%m/%Y')}**"
+        )
+
+        for prioridade in briefing_prioridades:
+
+            st.write(
+                prioridade
+            )
+
+        st.caption(
+            "Gerado automaticamente pela Inviora "
+            "com base nos dados guardados."
+        )
     st.divider()
     
     if faturas_db.empty:
