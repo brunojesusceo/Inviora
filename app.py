@@ -4337,6 +4337,7 @@ elif pagina == "📥 Importar inventário":
             guardar_inventario_db(
     fornecedor,
     periodo,
+    dia_semana,
     ficheiro.name,
     dados,
 )
