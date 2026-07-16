@@ -2675,6 +2675,74 @@ def eliminar_fatura_db(
         .eq("id", int(fatura_id))
         .execute()
     )
+    def eliminar_todas_faturas_db():
+
+    (
+        supabase
+        .table("fatura_linhas")
+        .delete()
+        .neq("id", 0)
+        .execute()
+    )
+
+    (
+        supabase
+        .table("faturas")
+        .delete()
+        .neq("id", 0)
+        .execute()
+    )
+
+
+def eliminar_todos_inventarios_db():
+
+    (
+        supabase
+        .table("inventarios")
+        .delete()
+        .neq("id", 0)
+        .execute()
+    )
+
+    st.session_state.inventarios = {
+        fornecedor: {
+            "Atual": None,
+            "Anterior": None,
+        }
+        for fornecedor in FORNECEDORES
+    }
+
+    st.session_state.nomes_ficheiros = {
+        fornecedor: {
+            "Atual": None,
+            "Anterior": None,
+        }
+        for fornecedor in FORNECEDORES
+    }
+
+
+def repor_aplicacao_db():
+
+    eliminar_todas_faturas_db()
+    eliminar_todos_inventarios_db()
+
+    st.session_state.dias_objetivo = {
+        "Logista": 1.0,
+        "Tabaqueira": 3.0,
+    }
+
+    st.session_state.margem_dias = {
+        "Logista": 0.25,
+        "Tabaqueira": 0.50,
+    }
+
+    st.session_state.multiplo = {
+        "Logista": 1,
+        "Tabaqueira": 1,
+    }
+
+    st.session_state.dias_listagem = 7.0
+
 
 # =========================================================
 # MENU
@@ -3003,6 +3071,153 @@ if pagina == "🛠️ Administração":
                     st.exception(
                         erro
                     )
+
+    st.divider()
+
+    st.subheader(
+        "⚠️ Zona de perigo"
+    )
+
+    st.warning(
+        "Estas ações são permanentes e não podem ser anuladas."
+    )
+
+    # =====================================================
+    # APAGAR TODAS AS FATURAS
+    # =====================================================
+
+    with st.expander(
+        "🗑️ Apagar todas as faturas"
+    ):
+
+        confirmar_todas_faturas = st.text_input(
+            "Escreve APAGAR FATURAS para confirmar",
+            key="confirmar_todas_faturas",
+        )
+
+        if st.button(
+            "Apagar todas as faturas",
+            type="primary",
+            disabled=(
+                confirmar_todas_faturas
+                != "APAGAR FATURAS"
+            ),
+            use_container_width=True,
+            key="botao_apagar_todas_faturas",
+        ):
+
+            try:
+
+                eliminar_todas_faturas_db()
+
+                st.success(
+                    "Todas as faturas foram apagadas."
+                )
+
+                st.rerun()
+
+            except Exception as erro:
+
+                st.error(
+                    "Não foi possível apagar todas as faturas."
+                )
+
+                st.exception(
+                    erro
+                )
+
+    # =====================================================
+    # APAGAR TODOS OS INVENTÁRIOS
+    # =====================================================
+
+    with st.expander(
+        "🗑️ Apagar todos os inventários"
+    ):
+
+        confirmar_todos_inventarios = st.text_input(
+            "Escreve APAGAR INVENTÁRIOS para confirmar",
+            key="confirmar_todos_inventarios",
+        )
+
+        if st.button(
+            "Apagar todos os inventários",
+            type="primary",
+            disabled=(
+                confirmar_todos_inventarios
+                != "APAGAR INVENTÁRIOS"
+            ),
+            use_container_width=True,
+            key="botao_apagar_todos_inventarios",
+        ):
+
+            try:
+
+                eliminar_todos_inventarios_db()
+
+                st.success(
+                    "Todos os inventários foram apagados."
+                )
+
+                st.rerun()
+
+            except Exception as erro:
+
+                st.error(
+                    "Não foi possível apagar os inventários."
+                )
+
+                st.exception(
+                    erro
+                )
+
+    # =====================================================
+    # REPOR A APLICAÇÃO
+    # =====================================================
+
+    with st.expander(
+        "💣 Repor completamente a aplicação"
+    ):
+
+        st.error(
+            "Esta ação apaga todas as faturas, inventários "
+            "e repõe as definições padrão."
+        )
+
+        confirmar_reposicao = st.text_input(
+            "Escreve REPOR INVIORA para confirmar",
+            key="confirmar_reposicao",
+        )
+
+        if st.button(
+            "Repor aplicação",
+            type="primary",
+            disabled=(
+                confirmar_reposicao
+                != "REPOR INVIORA"
+            ),
+            use_container_width=True,
+            key="botao_repor_inviora",
+        ):
+
+            try:
+
+                repor_aplicacao_db()
+
+                st.success(
+                    "A Inviora foi reposta."
+                )
+
+                st.rerun()
+
+            except Exception as erro:
+
+                st.error(
+                    "Não foi possível repor a aplicação."
+                )
+
+                st.exception(
+                    erro
+                )
 
 
 elif pagina == "🏠 Home":
