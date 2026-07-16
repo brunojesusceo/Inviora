@@ -2154,17 +2154,14 @@ def calcular_encomenda(
     fornecedor
 )
 
-    if atual is None:
+        if atual is None:
 
-        return )
-        (
-
+        return (
             None,
-
-           (
-    f"Falta carregar {fornecedor} — "
-    f"Atual — {dia_atual}."
-
+            (
+                f"Falta carregar {fornecedor} — "
+                f"Atual — {dia_atual}."
+            ),
         )
 
     atual = garantir_produto(
