@@ -5293,41 +5293,41 @@ elif pagina == "🚚 Voltas":
                         f"a volta {codigo_volta}."
                     )
                     st.exception(erro)
-             st.divider()
+            st.divider()
 
-             st.subheader(
-                "Produtos e quantidades"
-            )
+              st.subheader(
+                 "Produtos e quantidades"
+             )
 
-            produtos_guardados = (
-                carregar_produtos_volta_db(
-                    codigo_volta
-                )
-            )
+             produtos_guardados = (
+                 carregar_produtos_volta_db(
+                     codigo_volta
+                 )
+             )
 
-            if produtos_guardados:
+             if produtos_guardados:
 
-                tabela_produtos = pd.DataFrame(
-                    produtos_guardados
-                )
+                 tabela_produtos = pd.DataFrame(
+                     produtos_guardados
+                 )
 
-                colunas_mostrar = [
-                    coluna
-                    for coluna in [
-                        "referencia",
-                        "produto",
-                        "quantidade",
-                    ]
-                    if coluna in tabela_produtos.columns
-                ]
+                 colunas_mostrar = [
+                     coluna
+                     for coluna in [
+                         "referencia",
+                         "produto",
+                         "quantidade",
+                     ]
+                     if coluna in tabela_produtos.columns
+                 ] 
 
-                st.dataframe(
-                    tabela_produtos[
-                        colunas_mostrar
-                    ],
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                 st.dataframe(
+                     tabela_produtos[
+                         colunas_mostrar
+                     ],
+                     use_container_width=True,
+                     hide_index=True,
+                 )
 
             else:
 
