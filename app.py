@@ -2693,6 +2693,8 @@ def eliminar_fatura_db(
         .execute()
     )
 
+    return True
+
 
 def eliminar_todos_inventarios_db():
 
@@ -2719,6 +2721,8 @@ def eliminar_todos_inventarios_db():
         }
         for fornecedor in FORNECEDORES
     }
+
+    return True
 
 
 def repor_aplicacao_db():
