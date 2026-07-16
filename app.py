@@ -1375,8 +1375,8 @@ def carregar_inventarios_db():
         if periodo not in PERIODOS:
             continue
 
-if dia_semana not in DIAS_SEMANA:
-    continue
+        if dia_semana not in DIAS_SEMANA:
+            continue
 
         dados = pd.DataFrame(
             dados_json
