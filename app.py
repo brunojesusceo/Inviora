@@ -86,6 +86,16 @@ DIAS_SEMANA = [
     "Sábado",
     "Domingo",
 ]
+VOLTAS = [
+    "11",
+    "12",
+    "14",
+    "15",
+    "19",
+    "20",
+    "21",
+    "28",
+]
 MAPA_DIAS = {
     0: "Segunda-feira",
     1: "Terça-feira",
@@ -1335,6 +1345,52 @@ def dataframe_para_json(
     return json.loads(
         texto_json
     )
+    
+def carregar_voltas_db():
+
+    resposta = (
+        supabase
+        .table("voltas")
+        .select("*")
+        .order("codigo")
+        .execute()
+    )
+
+    return resposta.data or []
+
+
+def guardar_volta_db(
+        codigo,
+        vendedor,
+        dias_semana,
+        ativa,
+):
+
+    registo = {
+        "codigo": str(codigo),
+        "vendedor": (
+            vendedor.strip()
+            if vendedor
+            else None
+        ),
+        "dias_semana": dias_semana,
+        "ativa": bool(ativa),
+        "atualizado_em": datetime.now(
+            TZ_PORTUGAL
+        ).isoformat(),
+    }
+
+    (
+        supabase
+        .table("voltas")
+        .upsert(
+            registo,
+            on_conflict="codigo",
+        )
+        .execute()
+    )
+
+    return True
 
 
 def guardar_inventario_db(
@@ -2922,6 +2978,7 @@ with st.sidebar:
     "🧾 Faturas",
     "📅 Calendário",
     "📦 Encomendas",
+    "🚚 Voltas",    
     "📈 Vendas",
     "📋 Produtos",
     "🛠️ Administração",
