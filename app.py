@@ -1169,7 +1169,7 @@ inventarios_fornecedor = st.session_state.inventarios.get(fornecedor, {})
 inventarios_periodo = inventarios_fornecedor.get(periodo, {})
 
 return inventarios_periodo.get(dia_semana)
-    def dia_stock_atual():
+def dia_stock_atual():
 
     return MAPA_DIAS[
         hoje_portugal().weekday()
