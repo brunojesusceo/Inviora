@@ -2676,28 +2676,15 @@ def eliminar_fatura_db(
         .execute()
     )
     def eliminar_todas_faturas_db():
-
-        supabase.table("fatura_linhas") \
-        .delete() \
-        .neq("id", 0) \
-        .execute()
-
-        supabase.table("faturas") \
-        .delete() \
-        .neq("id", 0) \
-        .execute()
-
+    supabase.table("fatura_linhas").delete().neq("id", 0).execute()
+    supabase.table("faturas").delete().neq("id", 0).execute()
     return True
 
 
 def eliminar_todos_inventarios_db():
+    supabase.table("inventarios").delete().neq("id", 0).execute()
 
-        supabase.table("inventarios") \
-        .delete() \
-        .neq("id", 0) \
-        .execute()
-
-        st.session_state.inventarios = {
+    st.session_state.inventarios = {
         fornecedor: {
             "Atual": None,
             "Anterior": None,
@@ -2705,7 +2692,7 @@ def eliminar_todos_inventarios_db():
         for fornecedor in FORNECEDORES
     }
 
-        st.session_state.nomes_ficheiros = {
+    st.session_state.nomes_ficheiros = {
         fornecedor: {
             "Atual": None,
             "Anterior": None,
