@@ -1173,20 +1173,17 @@ def juntar_inventarios(
     )
 
 def dataframe_para_json(
-    dados
+    dados,
 ):
 
-    dados_limpos = dados.copy()
-
-    dados_limpos = dados_limpos.where(
-        pd.notna(
-            dados_limpos
-        ),
-        None,
+    texto_json = dados.to_json(
+        orient="records",
+        date_format="iso",
+        force_ascii=False,
     )
 
-    return dados_limpos.to_dict(
-        orient="records"
+    return json.loads(
+        texto_json
     )
 
 
@@ -1198,32 +1195,26 @@ def guardar_inventario_db(
 ):
 
     registo = {
-        "fornecedor": fornecedor,
-        "periodo": periodo,
-        "ficheiro": ficheiro_nome,
-        "dados": dataframe_para_json(
-            dados
-        ),
-        "atualizado_em": (
-            datetime.now(
-                TZ_PORTUGAL
-            ).isoformat()
-        ),
+        "fornecedor": str(fornecedor),
+        "periodo": str(periodo),
+        "ficheiro": str(ficheiro_nome),
+        "dados": dataframe_para_json(dados),
+        "atualizado_em": datetime.now(
+            TZ_PORTUGAL
+        ).isoformat(),
     }
 
-    (
+    resposta = (
         supabase
-        .table(
-            "inventarios"
-        )
+        .table("inventarios")
         .upsert(
             registo,
-            on_conflict=(
-                "fornecedor,periodo"
-            ),
+            on_conflict="fornecedor,periodo",
         )
         .execute()
     )
+
+    return resposta
 
 
 def carregar_inventarios_db():
@@ -3085,6 +3076,13 @@ elif pagina == "📥 Importar inventário":
             st.session_state.nomes_ficheiros[
                 fornecedor
             ][periodo] = ficheiro.name
+
+            guardar_inventario_db(
+    fornecedor,
+    periodo,
+    ficheiro.name,
+    dados,
+)
 
             st.success(
 
