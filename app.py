@@ -4269,7 +4269,7 @@ elif pagina == "📥 Importar inventário":
         "Importar inventário"
     )
 
-    fornecedor = st.selectbox(
+        fornecedor = st.selectbox(
         "Fornecedor",
         FORNECEDORES,
     )
@@ -4279,24 +4279,23 @@ elif pagina == "📥 Importar inventário":
         PERIODOS,
         horizontal=True,
     )
-dia_semana = st.selectbox(
-    "Dia da semana",
-    DIAS_SEMANA,
-)
+
+    dia_semana = st.selectbox(
+        "Dia da semana",
+        DIAS_SEMANA,
+    )
 
     ficheiro = st.file_uploader(
-
-        f"{fornecedor} — {periodo}",
-
+        f"{fornecedor} — {periodo} — {dia_semana}",
         type=[
             "xlsx",
             "csv",
         ],
-
         key=(
             f"upload_"
             f"{fornecedor}_"
-            f"{periodo}"
+            f"{periodo}_"
+            f"{dia_semana}"
         ),
     )
 
