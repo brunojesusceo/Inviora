@@ -2692,9 +2692,7 @@ with st.sidebar:
         "Inviora v0.6.0"
     )
 
-    if st.button(
-    "Terminar sessão"
-):
+    if st.button("Terminar sessão"):
 
     cookie_manager.delete(
         COOKIE_LOGIN,
