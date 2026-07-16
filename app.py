@@ -4372,7 +4372,7 @@ elif pagina == "📥 Importar inventário":
                 f"{erro}"
             )
 
-        estado = []
+    estado = []
 
     for nome_fornecedor in FORNECEDORES:
 
