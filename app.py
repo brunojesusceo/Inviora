@@ -2156,7 +2156,8 @@ def calcular_encomenda(
 
     if atual is None:
 
-        return (
+        return )
+        (
 
             None,
 
