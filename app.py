@@ -1373,7 +1373,7 @@ def carregar_inventarios_db():
             continue
 
         if periodo not in PERIODOS:
-    continue
+            continue
 
 if dia_semana not in DIAS_SEMANA:
     continue
