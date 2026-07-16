@@ -3646,6 +3646,202 @@ elif pagina == "🏠 Home":
             "Gerado automaticamente pela Inviora "
             "com base nos dados guardados."
         )
+            # =====================================================
+    # AÇÕES RECOMENDADAS
+    # =====================================================
+
+    st.subheader(
+        "O que fazer agora"
+    )
+
+    acoes_recomendadas = []
+
+    for fornecedor_acao in FORNECEDORES:
+
+        resultado_acao, erro_acao = calcular_encomenda(
+            fornecedor_acao
+        )
+
+        if erro_acao is not None:
+
+            acoes_recomendadas.append(
+                {
+                    "Fornecedor": fornecedor_acao,
+                    "Ação": "Completar dados",
+                    "Detalhe": erro_acao,
+                    "Prioridade": "⚪ Dados em falta",
+                }
+            )
+
+            continue
+
+        artigos_criticos_acao = int(
+            (
+                resultado_acao[
+                    "autonomia_dias"
+                ] < 1
+            ).sum()
+        )
+
+        artigos_encomendar_acao = int(
+            (
+                resultado_acao[
+                    "sugestao"
+                ] > 0
+            ).sum()
+        )
+
+        quantidade_sugerida_acao = int(
+            resultado_acao[
+                "sugestao"
+            ].sum()
+        )
+
+        if artigos_criticos_acao > 0:
+
+            acoes_recomendadas.append(
+                {
+                    "Fornecedor": fornecedor_acao,
+                    "Ação": "Preparar encomenda hoje",
+                    "Detalhe": (
+                        f"{artigos_criticos_acao} artigos críticos · "
+                        f"{artigos_encomendar_acao} artigos a encomendar · "
+                        f"{quantidade_sugerida_acao} unidades sugeridas"
+                    ),
+                    "Prioridade": "🔴 Alta",
+                }
+            )
+
+        elif artigos_encomendar_acao > 0:
+
+            acoes_recomendadas.append(
+                {
+                    "Fornecedor": fornecedor_acao,
+                    "Ação": "Rever encomenda",
+                    "Detalhe": (
+                        f"{artigos_encomendar_acao} artigos · "
+                        f"{quantidade_sugerida_acao} unidades sugeridas"
+                    ),
+                    "Prioridade": "🟠 Média",
+                }
+            )
+
+        else:
+
+            acoes_recomendadas.append(
+                {
+                    "Fornecedor": fornecedor_acao,
+                    "Ação": "Não encomendar",
+                    "Detalhe": (
+                        "A cobertura atual é suficiente."
+                    ),
+                    "Prioridade": "🟢 Baixa",
+                }
+            )
+
+    st.dataframe(
+        pd.DataFrame(
+            acoes_recomendadas
+        )[
+            [
+                "Prioridade",
+                "Fornecedor",
+                "Ação",
+                "Detalhe",
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    # =====================================================
+    # TOP PRODUTOS MAIS URGENTES
+    # =====================================================
+
+    produtos_urgentes = []
+
+    for fornecedor_urgente in FORNECEDORES:
+
+        resultado_urgente, erro_urgente = calcular_encomenda(
+            fornecedor_urgente
+        )
+
+        if erro_urgente is not None:
+
+            continue
+
+        resultado_urgente = resultado_urgente[
+            resultado_urgente[
+                "autonomia_dias"
+            ] < 3
+        ].copy()
+
+        if resultado_urgente.empty:
+
+            continue
+
+        resultado_urgente[
+            "Fornecedor"
+        ] = fornecedor_urgente
+
+        produtos_urgentes.append(
+            resultado_urgente
+        )
+
+    if produtos_urgentes:
+
+        top_urgentes = (
+            pd.concat(
+                produtos_urgentes,
+                ignore_index=True,
+            )
+            .sort_values(
+                [
+                    "autonomia_dias",
+                    "sugestao",
+                ],
+                ascending=[
+                    True,
+                    False,
+                ],
+            )
+            .head(
+                10
+            )
+        )
+
+        st.subheader(
+            "Top 10 produtos mais urgentes"
+        )
+
+        colunas_urgentes = [
+            coluna
+            for coluna in [
+                "Fornecedor",
+                "referencia",
+                "produto",
+                "stock_phc",
+                "media_dia",
+                "autonomia_dias",
+                "sugestao",
+                "estado_stock",
+            ]
+            if coluna in top_urgentes.columns
+        ]
+
+        st.dataframe(
+            top_urgentes[
+                colunas_urgentes
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    else:
+
+        st.success(
+            "Não existem produtos abaixo de 3 dias de autonomia."
+        )
     st.divider()
     
     if faturas_db.empty:
