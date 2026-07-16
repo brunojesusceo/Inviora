@@ -1163,7 +1163,7 @@ def obter_inventario(
 ):
 
     if dia_semana is None:
-    dia_semana = MAPA_DIAS[hoje_portugal().weekday()]
+        dia_semana = MAPA_DIAS[hoje_portugal().weekday()]
 
 inventarios_fornecedor = st.session_state.inventarios.get(fornecedor, {})
 inventarios_periodo = inventarios_fornecedor.get(periodo, {})
