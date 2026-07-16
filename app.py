@@ -3331,6 +3331,45 @@ elif pagina == "🏠 Home":
         numero_faturas_futuras,
     )
 
+        # =====================================================
+    # ESTADO DOS INVENTÁRIOS
+    # =====================================================
+
+    inventarios_em_falta = []
+
+    for fornecedor_estado in FORNECEDORES:
+
+        for periodo_estado in PERIODOS:
+
+            dados_estado = obter_inventario(
+                fornecedor_estado,
+                periodo_estado,
+            )
+
+            if dados_estado is None:
+
+                inventarios_em_falta.append(
+                    f"{fornecedor_estado} — "
+                    f"{periodo_estado}"
+                )
+
+    percentagem_inventarios = int(
+        (
+            inventarios_carregados
+            / 4
+        )
+        * 100
+    )
+
+    st.caption(
+        f"Preparação dos dados: "
+        f"{percentagem_inventarios}%"
+    )
+
+    st.progress(
+        percentagem_inventarios
+    )
+
     if inventarios_carregados == 4:
 
         st.success(
@@ -3346,11 +3385,31 @@ elif pagina == "🏠 Home":
             f"inventários carregados."
         )
 
+        st.markdown(
+            "**Falta importar:**"
+        )
+
+        for inventario_em_falta in inventarios_em_falta:
+
+            st.write(
+                f"• {inventario_em_falta}"
+            )
+
     else:
 
         st.error(
             "❌ Ainda não existem inventários carregados."
         )
+
+        st.markdown(
+            "**Falta importar:**"
+        )
+
+        for inventario_em_falta in inventarios_em_falta:
+
+            st.write(
+                f"• {inventario_em_falta}"
+            )
 
     if total_artigos_criticos > 0:
 
