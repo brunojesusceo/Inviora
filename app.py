@@ -1305,12 +1305,7 @@ def carregar_inventarios_db():
         ][periodo] = registo.get(
             "ficheiro"
         )
-guardar_inventario_db(
-    fornecedor,
-    periodo,
-    ficheiro.name,
-    dados,
-)
+
 
 
 if "inventarios_recuperados" not in st.session_state:
