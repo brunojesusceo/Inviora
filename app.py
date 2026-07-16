@@ -1280,13 +1280,13 @@ def dataframe_para_json(
     )
 
 
-guardar_inventario_db(
+def guardar_inventario_db(
     fornecedor,
     periodo,
     dia_semana,
-    ficheiro.name,
+    ficheiro_nome,
     dados,
-)
+):
 
     registo = {
         "fornecedor": str(
