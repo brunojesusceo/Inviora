@@ -4269,7 +4269,7 @@ elif pagina == "📥 Importar inventário":
         "Importar inventário"
     )
 
-        fornecedor = st.selectbox(
+    fornecedor = st.selectbox(
         "Fornecedor",
         FORNECEDORES,
     )
