@@ -2154,7 +2154,7 @@ def calcular_encomenda(
     fornecedor
 )
 
-        if atual is None:
+    if atual is None:
 
         return (
             None,
