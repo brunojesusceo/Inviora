@@ -2676,9 +2676,9 @@ def eliminar_fatura_db(
         .execute()
     )
     def eliminar_todas_faturas_db():
-    supabase.table("fatura_linhas").delete().neq("id", 0).execute()
-    supabase.table("faturas").delete().neq("id", 0).execute()
-    return True
+        supabase.table("fatura_linhas").delete().neq("id", 0).execute()
+        supabase.table("faturas").delete().neq("id", 0).execute()
+        return True
 
 
 def eliminar_todos_inventarios_db():
