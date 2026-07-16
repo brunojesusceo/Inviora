@@ -4427,7 +4427,7 @@ elif pagina == "📥 Importar inventário":
                     nome_dia,
                 )
 
-                                nomes_fornecedor = (
+                nomes_fornecedor = (
                     st.session_state.nomes_ficheiros.get(
                         nome_fornecedor,
                         {}
