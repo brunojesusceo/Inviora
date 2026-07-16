@@ -77,6 +77,24 @@ PERIODOS = [
     "Atual",
     "Anterior",
 ]
+DIAS_SEMANA = [
+    "Segunda-feira",
+    "Terça-feira",
+    "Quarta-feira",
+    "Quinta-feira",
+    "Sexta-feira",
+    "Sábado",
+    "Domingo",
+]
+MAPA_DIAS = {
+    0: "Segunda-feira",
+    1: "Terça-feira",
+    2: "Quarta-feira",
+    3: "Quinta-feira",
+    4: "Sexta-feira",
+    5: "Sábado",
+    6: "Domingo",
+}
 
 TZ_PORTUGAL = ZoneInfo(
     "Europe/Lisbon"
@@ -408,8 +426,17 @@ if "inventarios" not in st.session_state:
     st.session_state.inventarios = {
 
         fornecedor: {
-            "Atual": None,
-            "Anterior": None,
+
+            periodo: {
+
+                dia: None
+
+                for dia
+                in DIAS_SEMANA
+            }
+
+            for periodo
+            in PERIODOS
         }
 
         for fornecedor
@@ -422,8 +449,17 @@ if "nomes_ficheiros" not in st.session_state:
     st.session_state.nomes_ficheiros = {
 
         fornecedor: {
-            "Atual": None,
-            "Anterior": None,
+
+            periodo: {
+
+                dia: None
+
+                for dia
+                in DIAS_SEMANA
+            }
+
+            for periodo
+            in PERIODOS
         }
 
         for fornecedor
@@ -1123,11 +1159,68 @@ def garantir_produto(
 def obter_inventario(
     fornecedor,
     periodo="Atual",
+    dia_semana=None,
 ):
 
-    return st.session_state.inventarios[
-        fornecedor
-    ][periodo]
+    if dia_semana is None:
+    dia_semana = MAPA_DIAS[hoje_portugal().weekday()]
+
+inventarios_fornecedor = st.session_state.inventarios.get(fornecedor, {})
+inventarios_periodo = inventarios_fornecedor.get(periodo, {})
+
+return inventarios_periodo.get(dia_semana)
+    def dia_stock_atual():
+
+    return MAPA_DIAS[
+        hoje_portugal().weekday()
+    ]
+
+
+def dia_entrega_seguinte():
+
+    weekday = hoje_portugal().weekday()
+
+    mapa_entrega = {
+        0: "Terça-feira",
+        1: "Quarta-feira",
+        2: "Quinta-feira",
+        3: "Sexta-feira",
+        4: "Segunda-feira",
+        5: "Segunda-feira",
+        6: "Segunda-feira",
+    }
+
+    return mapa_entrega[
+        weekday
+    ]
+
+
+def obter_inventarios_para_calculo(
+    fornecedor,
+):
+
+    dia_atual = dia_stock_atual()
+
+    dia_referencia = dia_entrega_seguinte()
+
+    atual = obter_inventario(
+        fornecedor,
+        "Atual",
+        dia_atual,
+    )
+
+    anterior = obter_inventario(
+        fornecedor,
+        "Anterior",
+        dia_referencia,
+    )
+
+    return (
+        atual,
+        anterior,
+        dia_atual,
+        dia_referencia,
+    )
 
 
 def juntar_inventarios(
@@ -1187,29 +1280,49 @@ def dataframe_para_json(
     )
 
 
-def guardar_inventario_db(
+guardar_inventario_db(
     fornecedor,
     periodo,
-    ficheiro_nome,
+    dia_semana,
+    ficheiro.name,
     dados,
-):
+)
 
     registo = {
-        "fornecedor": str(fornecedor),
-        "periodo": str(periodo),
-        "ficheiro": str(ficheiro_nome),
-        "dados": dataframe_para_json(dados),
-        "atualizado_em": datetime.now(
-            TZ_PORTUGAL
-        ).isoformat(),
+        "fornecedor": str(
+            fornecedor
+        ),
+        "periodo": str(
+            periodo
+        ),
+        "dia_semana": str(
+            dia_semana
+        ),
+        "ficheiro": str(
+            ficheiro_nome
+        ),
+        "dados": dataframe_para_json(
+            dados
+        ),
+        "atualizado_em": (
+            datetime.now(
+                TZ_PORTUGAL
+            ).isoformat()
+        ),
     }
 
     resposta = (
         supabase
-        .table("inventarios")
+        .table(
+            "inventarios"
+        )
         .upsert(
             registo,
-            on_conflict="fornecedor,periodo",
+            on_conflict=(
+                "fornecedor,"
+                "periodo,"
+                "dia_semana"
+            ),
         )
         .execute()
     )
@@ -1244,6 +1357,9 @@ def carregar_inventarios_db():
         periodo = registo.get(
             "periodo"
         )
+        dia_semana = registo.get(
+    "dia_semana"
+)
 
         dados_json = registo.get(
             "dados"
@@ -1259,6 +1375,9 @@ def carregar_inventarios_db():
         if periodo not in PERIODOS:
 
             continue
+            if dia_semana not in DIAS_SEMANA:
+
+    continue
 
         dados = pd.DataFrame(
             dados_json
@@ -1288,14 +1407,14 @@ def carregar_inventarios_db():
             )
 
         st.session_state.inventarios[
-            fornecedor
-        ][periodo] = dados
+    fornecedor
+][periodo][dia_semana] = dados
 
         st.session_state.nomes_ficheiros[
-            fornecedor
-        ][periodo] = registo.get(
-            "ficheiro"
-        )
+    fornecedor
+][periodo][dia_semana] = registo.get(
+    "ficheiro"
+)
 
 
 
@@ -2027,19 +2146,14 @@ def calcular_encomenda(
     fornecedor
 ):
 
-    atual = obter_inventario(
-
-        fornecedor,
-
-        "Atual",
-    )
-
-    anterior = obter_inventario(
-
-        fornecedor,
-
-        "Anterior",
-    )
+    (
+    atual,
+    anterior,
+    dia_atual,
+    dia_referencia,
+) = obter_inventarios_para_calculo(
+    fornecedor
+)
 
     if atual is None:
 
@@ -2047,7 +2161,10 @@ def calcular_encomenda(
 
             None,
 
-            f"Carrega primeiro o período atual de {fornecedor}.",
+           (
+    f"Falta carregar {fornecedor} — "
+    f"Atual — {dia_atual}."
+
         )
 
     atual = garantir_produto(
@@ -4165,6 +4282,10 @@ elif pagina == "📥 Importar inventário":
         PERIODOS,
         horizontal=True,
     )
+dia_semana = st.selectbox(
+    "Dia da semana",
+    DIAS_SEMANA,
+)
 
     ficheiro = st.file_uploader(
 
@@ -4193,12 +4314,12 @@ elif pagina == "📥 Importar inventário":
             )
 
             st.session_state.inventarios[
-                fornecedor
-            ][periodo] = dados
+    fornecedor
+][periodo][dia_semana] = dados
 
             st.session_state.nomes_ficheiros[
-                fornecedor
-            ][periodo] = ficheiro.name
+    fornecedor
+][periodo][dia_semana] = ficheiro.name
 
             guardar_inventario_db(
     fornecedor,
