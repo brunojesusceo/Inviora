@@ -1174,16 +1174,56 @@ def obter_inventario(
         )
     )
 
+    if not isinstance(
+        inventarios_fornecedor,
+        dict
+    ):
+        return None
+
     inventarios_periodo = (
         inventarios_fornecedor.get(
-            periodo,
-            {}
+            periodo
         )
     )
 
-    return inventarios_periodo.get(
-        dia_semana
-    )
+    if inventarios_periodo is None:
+        return None
+
+    # Compatibilidade com listagens antigas,
+    # guardadas diretamente como DataFrame.
+    if isinstance(
+        inventarios_periodo,
+        pd.DataFrame
+    ):
+        return inventarios_periodo
+
+    # Nova estrutura:
+    # fornecedor -> período -> dia -> DataFrame
+    if isinstance(
+        inventarios_periodo,
+        dict
+    ):
+        inventario_dia = (
+            inventarios_periodo.get(
+                dia_semana
+            )
+        )
+
+        if isinstance(
+            inventario_dia,
+            pd.DataFrame
+        ):
+            return inventario_dia
+
+        if isinstance(
+            inventario_dia,
+            list
+        ):
+            return pd.DataFrame(
+                inventario_dia
+            )
+
+    return None
 
 
 def dia_stock_atual():
