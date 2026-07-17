@@ -5299,13 +5299,14 @@ elif pagina == "🚚 Voltas":
                  "Produtos e quantidades"
              )
 
-             produtos_guardados = (
+             
+            produtos_guardados = (
                  carregar_produtos_volta_db(
                      codigo_volta
                  )
              )
 
-             if produtos_guardados:
+            if produtos_guardados:
 
                  tabela_produtos = pd.DataFrame(
                      produtos_guardados
