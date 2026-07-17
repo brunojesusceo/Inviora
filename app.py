@@ -1422,7 +1422,7 @@ def substituir_produtos_volta_db(
         .delete()\
 .eq("volta_codigo", codigo)\
 .eq("origem", "ficheiro")
-        )
+        
         .execute()
     )
 
