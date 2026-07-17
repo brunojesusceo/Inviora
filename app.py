@@ -1419,10 +1419,9 @@ def substituir_produtos_volta_db(
     (
         supabase
         .table("volta_produtos")
-        .delete()
-        .eq(
-            "volta_codigo",
-            codigo_volta,
+        .delete()\
+.eq("volta_codigo", codigo)\
+.eq("origem", "ficheiro")
         )
         .execute()
     )
@@ -1456,6 +1455,7 @@ def substituir_produtos_volta_db(
                 "referencia": referencia,
                 "produto": produto or None,
                 "quantidade": float(quantidade),
+                "origem": "ficheiro",
                 "atualizado_em": datetime.now(
                     TZ_PORTUGAL
                 ).isoformat(),
@@ -1472,6 +1472,45 @@ def substituir_produtos_volta_db(
         )
 
     return len(registos)
+
+def guardar_artigo_extra_volta_db(
+    codigo_volta,
+    referencia,
+    produto,
+    quantidade,
+):
+
+    (
+        supabase.table("volta_produtos")
+        .insert(
+            {
+                "volta_codigo": str(codigo_volta),
+                "referencia": referencia,
+                "produto": produto,
+                "quantidade": quantidade,
+                "origem": "manual",
+                "atualizado_em": datetime.now(
+                    TZ_PORTUGAL
+                ).isoformat(),
+            }
+        )
+        .execute()
+    )
+
+
+def eliminar_artigo_extra_volta_db(
+    codigo_volta,
+    referencia,
+):
+
+    (
+        supabase.table("volta_produtos")
+        .delete()
+        .eq("volta_codigo", str(codigo_volta))
+        .eq("referencia", referencia)
+        .eq("origem", "manual")
+        .execute()
+    )
 
 
 def guardar_inventario_db(
@@ -5297,8 +5336,8 @@ elif pagina == "🚚 Voltas":
 
             st.subheader(
                  "Produtos e quantidades"
-             )
-
+            )
+            
              
             produtos_guardados = (
                  carregar_produtos_volta_db(
@@ -5432,6 +5471,133 @@ elif pagina == "🚚 Voltas":
                     )
 
                     st.exception(erro)
+                    
+            st.divider()
+
+            st.subheader("📦 Artigos extra")
+
+            st.caption(
+                "Adiciona artigos que o vendedor leva, "
+                "mas que não aparecem na folha da volta."
+            )
+
+            with st.form(
+                key=f"form_artigo_extra_{codigo_volta}"
+            ):
+
+                referencia_extra = st.text_input(
+                    "Referência",
+                    key=f"referencia_extra_{codigo_volta}",
+                )
+
+                produto_extra = st.text_input(
+                    "Produto",
+                    key=f"produto_extra_{codigo_volta}",
+                )
+
+                quantidade_extra = st.number_input(
+                    "Quantidade",
+                    min_value=1.0,
+                    step=1.0,
+                    value=1.0,
+                    key=f"quantidade_extra_{codigo_volta}",
+                )
+
+                adicionar_extra = st.form_submit_button(
+                    "➕ Adicionar artigo extra",
+                    use_container_width=True,
+                )
+
+            if adicionar_extra:
+
+                try:
+
+                    guardar_artigo_extra_volta_db(
+                        codigo_volta,
+                        referencia_extra,
+                        produto_extra,
+                        quantidade_extra,
+                    )
+
+                    st.success(
+                        "Artigo extra adicionado com sucesso."
+                    )
+
+                    st.rerun()
+
+                except Exception as erro:
+
+                    st.error(
+                        "Não foi possível adicionar "
+                        "o artigo extra."
+                    )
+
+                    st.exception(erro)
+
+            artigos_extra = [
+                registo
+                for registo in produtos_guardados
+                if registo.get("origem") == "manual"
+            ]
+
+            if artigos_extra:
+
+                st.markdown("**Artigos extra guardados**")
+
+                for artigo in artigos_extra:
+
+                    coluna_info, coluna_apagar = st.columns(
+                        [5, 1]
+                    )
+
+                    with coluna_info:
+
+                        st.write(
+                            f"**{artigo.get('referencia', '')}** — "
+                            f"{artigo.get('produto') or 'Sem nome'} — "
+                            f"{artigo.get('quantidade', 0)} unidades"
+                        )
+
+                    with coluna_apagar:
+
+                        if st.button(
+                            "🗑️",
+                            key=(
+                                f"apagar_extra_"
+                                f"{codigo_volta}_"
+                                f"{artigo.get('referencia')}"
+                            ),
+                            help="Eliminar artigo extra",
+                        ):
+
+                            try:
+
+                                eliminar_artigo_extra_volta_db(
+                                    codigo_volta,
+                                    artigo.get("referencia"),
+                                )
+
+                                st.success(
+                                    "Artigo extra eliminado."
+                                )
+
+                                st.rerun()
+
+                            except Exception as erro:
+
+                                st.error(
+                                    "Não foi possível eliminar "
+                                    "o artigo extra."
+                                )
+
+                                st.exception(erro)
+
+            else:
+
+                st.info(
+                    "Ainda não existem artigos extra "
+                    "nesta volta."
+                )
 
 
 elif pagina == "📈 Vendas":
