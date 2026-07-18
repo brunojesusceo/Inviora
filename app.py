@@ -5399,11 +5399,7 @@ elif pagina == "🚚 Voltas":
 
                     st.exception(erro)
 
-                   st.error(
-                        "Não foi possível adicionar o artigo extra."
-                    )
-
-                    st.exception(erro)
+                   
             st.divider()
 
             st.subheader(
