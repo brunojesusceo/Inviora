@@ -5544,7 +5544,7 @@ if st.button(
                     use_container_width=True,
                 )
 
-            if adicionar_extra:
+        if adicionar_extra:
 
                 try:
 
@@ -5576,7 +5576,7 @@ if st.button(
                 if registo.get("origem") == "manual"
             ]
 
-            if artigos_extra:
+        if artigos_extra:
 
                 st.markdown("**Artigos extra guardados**")
 
@@ -5628,7 +5628,7 @@ if st.button(
 
                                 st.exception(erro)
 
-            else:
+        else:
 
                 st.info(
                     "Ainda não existem artigos extra "
