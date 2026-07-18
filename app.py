@@ -5351,7 +5351,7 @@ elif pagina == "🚚 Voltas":
             f"Volta {codigo_volta} — {estado_texto}"
         ):
 
-        with st.form(key=f"form_artigo_extra_{codigo_volta}"):
+            with st.form(key=f"form_artigo_extra_{codigo_volta}"):
 
              referencia_extra = st.text_input(
                  "Referência",
@@ -5376,7 +5376,7 @@ elif pagina == "🚚 Voltas":
                  use_container_width=True,
     )
 
-        if adicionar_extra:
+            if adicionar_extra:
 
     try:
         guardar_artigo_extra_volta_db(
