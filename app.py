@@ -5351,64 +5351,56 @@ elif pagina == "🚚 Voltas":
             f"Volta {codigo_volta} — {estado_texto}"
         ):
 
-            with st.form(
-                key=f"form_volta_{codigo_volta}"
+                        with st.form(
+                key=f"form_artigo_extra_{codigo_volta}"
             ):
 
-                vendedor = st.text_input(
-                    "Vendedor responsável",
-                    value=vendedor_atual,
-                    key=(
-                        f"vendedor_"
-                        f"{codigo_volta}"
-                    ),
+                referencia_extra = st.text_input(
+                    "Referência",
+                    key=f"referencia_extra_{codigo_volta}",
                 )
 
-                dias_semana = st.multiselect(
-                    "Dias habituais da volta",
-                    options=DIAS_SEMANA,
-                    default=dias_atuais,
-                    key=(
-                        f"dias_volta_"
-                        f"{codigo_volta}"
-                    ),
+                produto_extra = st.text_input(
+                    "Produto",
+                    key=f"produto_extra_{codigo_volta}",
                 )
 
-                ativa = st.checkbox(
-                    "Volta ativa",
-                    value=bool(ativa_atual),
-                    key=(
-                        f"ativa_volta_"
-                        f"{codigo_volta}"
-                    ),
+                quantidade_extra = st.number_input(
+                    "Quantidade",
+                    min_value=1.0,
+                    step=1.0,
+                    value=1.0,
+                    key=f"quantidade_extra_{codigo_volta}",
                 )
 
-                guardar = st.form_submit_button(
-                    f"Guardar volta {codigo_volta}",
+                adicionar_extra = st.form_submit_button(
+                    "➕ Adicionar artigo extra",
                     use_container_width=True,
                 )
 
-            if guardar:
+            if adicionar_extra:
 
                 try:
-                    guardar_volta_db(
+
+                    guardar_artigo_extra_volta_db(
                         codigo_volta,
-                        vendedor,
-                        dias_semana,
-                        ativa,
+                        referencia_extra,
+                        produto_extra,
+                        quantidade_extra,
                     )
 
                     st.success(
-                        f"Volta {codigo_volta} guardada."
+                        "Artigo extra adicionado com sucesso."
                     )
 
                     st.rerun()
 
                 except Exception as erro:
+
                     st.error(
-                        "Não foi possível guardar "
-                        f"a volta {codigo_volta}."
+                        "Não foi possível adicionar o artigo extra."
                     )
+
                     st.exception(erro)
             st.divider()
 
