@@ -5497,7 +5497,6 @@ if st.button(
         st.exception(
             erro
         )
-                    
                     st.divider()
 
             st.subheader("📦 Artigos extra")
@@ -5621,6 +5620,7 @@ if st.button(
                     "Ainda não existem artigos extra "
                     f"associados à volta {codigo_volta}."
                 )
+                    
 
 
 elif pagina == "📈 Vendas":
