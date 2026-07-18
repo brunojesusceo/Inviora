@@ -5869,7 +5869,7 @@ else:
     key="foto_teste_ocr",
 )
 
-        if foto_teste_ocr is not None:
+    if foto_teste_ocr is not None:
 
         st.image(
             foto_teste_ocr,
