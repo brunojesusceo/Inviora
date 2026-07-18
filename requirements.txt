@@ -5,6 +5,3 @@ plotly
 pypdf
 supabase
 extra-streamlit-components
-easyocr
-opencv-python-headless
-Pillow
