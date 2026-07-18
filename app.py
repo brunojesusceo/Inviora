@@ -5859,7 +5859,7 @@ else:
     "Teste de leitura da fotografia"
 )
 
-foto_teste_ocr = st.file_uploader(
+    foto_teste_ocr = st.file_uploader(
     "Carregar fotografia para testar",
     type=[
         "jpg",
@@ -5869,59 +5869,52 @@ foto_teste_ocr = st.file_uploader(
     key="foto_teste_ocr",
 )
 
-if foto_teste_ocr is not None:
+        if foto_teste_ocr is not None:
 
-    st.image(
-        foto_teste_ocr,
-        caption="Fotografia carregada",
-        use_container_width=True,
-    )
+        st.image(
+            foto_teste_ocr,
+            caption="Fotografia carregada",
+            use_container_width=True,
+        )
 
-    if st.button(
-        "📷 Ler fotografia",
-        key="ler_foto_teste_ocr",
-    ):
+        if st.button(
+            "📷 Ler fotografia",
+            key="ler_foto_teste_ocr",
+        ):
 
-        try:
+            try:
+                with st.spinner(
+                    "A ler a fotografia..."
+                ):
+                    resultado_ocr = ler_texto_foto(
+                        foto_teste_ocr
+                    )
 
-            with st.spinner(
-                "A ler a fotografia..."
-            ):
+                if resultado_ocr.empty:
+                    st.warning(
+                        "Não foi encontrado texto na fotografia."
+                    )
+                else:
+                    st.success(
+                        f"Foram encontrados "
+                        f"{len(resultado_ocr)} blocos de texto."
+                    )
 
-                resultado_ocr = ler_texto_foto(
-                    foto_teste_ocr
+                    st.dataframe(
+                        resultado_ocr,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+            except Exception as erro:
+                st.error(
+                    "Não foi possível ler a fotografia."
+                )
+                st.exception(
+                    erro
                 )
 
-            if resultado_ocr.empty:
-
-                st.warning(
-                    "Não foi encontrado texto na fotografia."
-                )
-
-            else:
-
-                st.success(
-                    f"Foram encontrados "
-                    f"{len(resultado_ocr)} blocos de texto."
-                )
-
-                st.dataframe(
-                    resultado_ocr,
-                    use_container_width=True,
-                    hide_index=True,
-                )
-
-        except Exception as erro:
-
-            st.error(
-                "Não foi possível ler a fotografia."
-            )
-
-            st.exception(
-                erro
-            )
-
-st.divider()
+    st.divider()
 
     st.session_state.dias_listagem = st.number_input(
 
