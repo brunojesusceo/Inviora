@@ -5825,16 +5825,16 @@ else:
     )
 
     st.subheader(
-    "Teste da Inteligência Artificial"
-)
+        "Teste da Inteligência Artificial"
+    )
 
-if st.button(
-    "🤖 Testar ligação à OpenAI",
-    key="testar_openai",
-):
-    testar_openai()
+    if st.button(
+        "🤖 Testar ligação à OpenAI",
+        key="testar_openai",
+    ):
+        testar_openai()
 
-st.divider()
+    st.divider()
 
     st.session_state.dias_listagem = st.number_input(
 
