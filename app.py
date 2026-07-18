@@ -5544,7 +5544,7 @@ if st.button(
                     use_container_width=True,
                 )
 
-        if adicionar_extra:
+          if adicionar_extra:
 
                 try:
 
@@ -5570,7 +5570,7 @@ if st.button(
 
                     st.exception(erro)
 
-            artigos_extra = [
+          artigos_extra = [
                 registo
                 for registo in produtos_guardados
                 if registo.get("origem") == "manual"
