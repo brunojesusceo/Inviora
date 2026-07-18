@@ -5384,19 +5384,20 @@ elif pagina == "🚚 Voltas":
                         referencia_extra,
                         produto_extra,
                         quantidade_extra,
-        )
+                    )
 
-                st.success(
+                    st.success(
                         "Artigo extra adicionado com sucesso."
-        )
+                    )
 
-                st.rerun()
+                    st.rerun()
 
-               except Exception as erro:
-                   st.error(
-                       "Não foi possível adicionar o artigo extra."
-        )
-                   st.exception(erro)
+                except Exception as erro:
+                    st.error(
+                        "Não foi possível adicionar o artigo extra."
+                    )
+
+                    st.exception(erro)
 
                    st.error(
                         "Não foi possível adicionar o artigo extra."
