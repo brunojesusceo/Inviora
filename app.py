@@ -5407,18 +5407,34 @@ elif pagina == "🚚 Voltas":
 
             st.divider()
 
-            # ===============================================
+            # =====================================================
             # PRODUTOS NORMAIS DA VOLTA
-            # ===============================================
+            # =====================================================
 
-            st.subheader("Produtos e quantidades")
+            st.subheader(
+                "Produtos e quantidades"
+            )
 
             try:
-            produtos_guardados = (
-                carregar_produtos_volta_db(
-                    codigo_volta
+
+                produtos_guardados = (
+                    carregar_produtos_volta_db(
+                        codigo_volta
+                    )
                 )
-            )
+
+            except Exception as erro:
+
+                st.error(
+                    "Não foi possível carregar os produtos "
+                    "desta volta."
+                )
+
+                st.exception(
+                    erro
+                )
+
+                produtos_guardados = []
 
             produtos_manuais = [
                 registo
@@ -5450,12 +5466,10 @@ elif pagina == "🚚 Voltas":
                     ]
                 )
 
-            tabela_inicial["apagar"] = False
-
             tabela_editada = st.data_editor(
                 tabela_inicial,
                 num_rows="dynamic",
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 key=(
                     f"editor_produtos_volta_"
@@ -5478,16 +5492,12 @@ elif pagina == "🚚 Voltas":
                             step=1.0,
                             format="%.0f",
                         ),
-                    "apagar":
-                        st.column_config.CheckboxColumn(
-                            "Apagar",
-                            help=(
-                                "Marca esta opção para "
-                                "eliminar o artigo."
-                            ),
-                            default=False,
-                        ),
                 },
+            )
+
+            st.caption(
+                "Para apagar um produto, elimina a linha "
+                "na tabela e depois guarda novamente."
             )
 
             if st.button(
@@ -5499,56 +5509,21 @@ elif pagina == "🚚 Voltas":
                     f"guardar_produtos_manuais_"
                     f"{codigo_volta}"
                 ),
-                use_container_width=True,
+                width="stretch",
             ):
 
                 try:
 
-                    linhas_apagadas = int(
-                        tabela_editada[
-                            "apagar"
-                        ].fillna(
-                            False
-                        ).sum()
-                    )
-
-                    tabela_para_guardar = (
-                        tabela_editada.loc[
-                            ~tabela_editada[
-                                "apagar"
-                            ].fillna(
-                                False
-                            )
-                        ]
-                        .drop(
-                            columns=[
-                                "apagar"
-                            ]
-                        )
-                        .copy()
-                    )
-
                     total_guardado = (
                         guardar_produtos_manuais_volta_db(
                             codigo_volta,
-                            tabela_para_guardar,
+                            tabela_editada,
                         )
                     )
-
-                    mensagem = (
-                        f"{total_guardado} produtos guardados "
-                        f"na volta {codigo_volta}."
-                    )
-
-                    if linhas_apagadas > 0:
-
-                        mensagem += (
-                            f" {linhas_apagadas} produtos "
-                            f"foram apagados."
-                        )
 
                     st.success(
-                        mensagem
+                        f"{total_guardado} produtos guardados "
+                        f"na volta {codigo_volta}."
                     )
 
                     st.rerun()
@@ -5556,8 +5531,8 @@ elif pagina == "🚚 Voltas":
                 except Exception as erro:
 
                     st.error(
-                        "Não foi possível guardar "
-                        "os produtos da volta."
+                        "Não foi possível guardar os produtos "
+                        "da volta."
                     )
 
                     st.exception(
@@ -5565,7 +5540,6 @@ elif pagina == "🚚 Voltas":
                     )
 
             st.divider()
-
             # ===============================================
             # ARTIGOS EXTRA
             # ===============================================
