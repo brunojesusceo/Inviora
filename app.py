@@ -1489,6 +1489,68 @@ def substituir_produtos_volta_db(
 
     return len(registos)
 
+def guardar_produtos_manuais_volta_db(
+    codigo_volta,
+    dados,
+):
+    codigo_volta = str(codigo_volta)
+
+    (
+        supabase
+        .table("volta_produtos")
+        .delete()
+        .eq("volta_codigo", codigo_volta)
+        .eq("origem", "volta_manual")
+        .execute()
+    )
+
+    registos = []
+
+    for _, linha in dados.iterrows():
+
+        referencia = str(
+            linha.get("referencia", "")
+        ).strip()
+
+        produto = str(
+            linha.get("produto", "")
+        ).strip()
+
+        quantidade = linha.get(
+            "quantidade",
+            0,
+        )
+
+        if not referencia:
+            continue
+
+        if pd.isna(quantidade):
+            quantidade = 0
+
+        registos.append(
+            {
+                "volta_codigo": codigo_volta,
+                "referencia": referencia,
+                "produto": produto or None,
+                "quantidade": float(quantidade),
+                "origem": "volta_manual",
+                "atualizado_em": datetime.now(
+                    TZ_PORTUGAL
+                ).isoformat(),
+            }
+        )
+
+    if registos:
+
+        (
+            supabase
+            .table("volta_produtos")
+            .insert(registos)
+            .execute()
+        )
+
+    return len(registos)
+
 def guardar_artigo_extra_volta_db(
     codigo_volta,
     referencia,
