@@ -5517,7 +5517,7 @@ if st.button(
                 "mas que não aparecem na folha da volta."
             )
 
-            with st.form(
+        with st.form(
                 key=f"form_artigo_extra_{codigo_volta}"
             ):
 
