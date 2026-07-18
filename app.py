@@ -512,16 +512,47 @@ if "dias_listagem" not in st.session_state:
 # =========================================================
 # FUNÇÕES GERAIS
 # =========================================================
-def obter_cliente_openai():
-    if OpenAI is None:
-        raise Exception("Biblioteca OpenAI não instalada.")
+@st.cache_resource
+def obter_leitor_ocr():
+    return easyocr.Reader(
+        ["pt", "en"],
+        gpu=False,
+    )
 
-    api_key = st.secrets.get("OPENAI_API_KEY")
 
-    if not api_key:
-        raise Exception("OPENAI_API_KEY não configurada.")
+def ler_texto_foto(ficheiro_imagem):
+    leitor = obter_leitor_ocr()
 
-    return OpenAI(api_key=api_key)
+    imagem = Image.open(
+        ficheiro_imagem
+    ).convert("RGB")
+
+    imagem_array = np.array(
+        imagem
+    )
+
+    resultados = leitor.readtext(
+        imagem_array,
+        detail=1,
+        paragraph=False,
+    )
+
+    linhas = []
+
+    for caixa, texto, confianca in resultados:
+        linhas.append(
+            {
+                "texto": str(texto).strip(),
+                "confianca": round(
+                    float(confianca),
+                    3,
+                ),
+            }
+        )
+
+    return pd.DataFrame(
+        linhas
+    )
 
 
 def testar_openai():
@@ -5825,16 +5856,72 @@ else:
     )
 
     st.subheader(
-        "Teste da Inteligência Artificial"
+    "Teste de leitura da fotografia"
+)
+
+foto_teste_ocr = st.file_uploader(
+    "Carregar fotografia para testar",
+    type=[
+        "jpg",
+        "jpeg",
+        "png",
+    ],
+    key="foto_teste_ocr",
+)
+
+if foto_teste_ocr is not None:
+
+    st.image(
+        foto_teste_ocr,
+        caption="Fotografia carregada",
+        use_container_width=True,
     )
 
     if st.button(
-        "🤖 Testar ligação à OpenAI",
-        key="testar_openai",
+        "📷 Ler fotografia",
+        key="ler_foto_teste_ocr",
     ):
-        testar_openai()
 
-    st.divider()
+        try:
+
+            with st.spinner(
+                "A ler a fotografia..."
+            ):
+
+                resultado_ocr = ler_texto_foto(
+                    foto_teste_ocr
+                )
+
+            if resultado_ocr.empty:
+
+                st.warning(
+                    "Não foi encontrado texto na fotografia."
+                )
+
+            else:
+
+                st.success(
+                    f"Foram encontrados "
+                    f"{len(resultado_ocr)} blocos de texto."
+                )
+
+                st.dataframe(
+                    resultado_ocr,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+        except Exception as erro:
+
+            st.error(
+                "Não foi possível ler a fotografia."
+            )
+
+            st.exception(
+                erro
+            )
+
+st.divider()
 
     st.session_state.dias_listagem = st.number_input(
 
