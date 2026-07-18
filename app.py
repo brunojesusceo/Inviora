@@ -5378,27 +5378,27 @@ elif pagina == "🚚 Voltas":
 
             if adicionar_extra:
 
-    try:
-        guardar_artigo_extra_volta_db(
-            codigo_volta,
-            referencia_extra,
-            produto_extra,
-            quantidade_extra,
+                try:
+                    guardar_artigo_extra_volta_db(
+                        codigo_volta,
+                        referencia_extra,
+                        produto_extra,
+                        quantidade_extra,
         )
 
-        st.success(
-            "Artigo extra adicionado com sucesso."
+                   st.success(
+                        "Artigo extra adicionado com sucesso."
         )
 
-        st.rerun()
+                   st.rerun()
 
-    except Exception as erro:
-        st.error(
-            "Não foi possível adicionar o artigo extra."
+               except Exception as erro:
+                   st.error(
+                       "Não foi possível adicionar o artigo extra."
         )
-        st.exception(erro)
+                   st.exception(erro)
 
-                    st.error(
+                   st.error(
                         "Não foi possível adicionar o artigo extra."
                     )
 
