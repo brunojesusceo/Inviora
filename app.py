@@ -5498,16 +5498,16 @@ if st.button(
             erro
         )
                     
-        st.divider()
+                    st.divider()
 
-        st.subheader("📦 Artigos extra")
+            st.subheader("📦 Artigos extra")
 
-        st.caption(
+            st.caption(
                 "Adiciona artigos que o vendedor leva, "
                 "mas que não aparecem na folha da volta."
             )
 
-        with st.form(
+            with st.form(
                 key=f"form_artigo_extra_{codigo_volta}"
             ):
 
@@ -5533,30 +5533,30 @@ if st.button(
                     "➕ Adicionar artigo extra",
                     use_container_width=True,
                 )
-                           
-                if adicionar_extra:
 
-                    try:
-                        guardar_artigo_extra_volta_db(
-                            codigo_volta,
-                            referencia_extra,
-                            produto_extra,
-                            quantidade_extra,
+            if adicionar_extra:
+
+                try:
+                    guardar_artigo_extra_volta_db(
+                        codigo_volta,
+                        referencia_extra,
+                        produto_extra,
+                        quantidade_extra,
                     )
 
-                        st.success(
-                            "Artigo extra adicionado com sucesso."
+                    st.success(
+                        "Artigo extra adicionado com sucesso."
                     )
 
-                        st.rerun()
+                    st.rerun()
 
-                    except Exception as erro:
-                        st.error(
-                            "Não foi possível adicionar "
-                            "o artigo extra."
+                except Exception as erro:
+                    st.error(
+                        "Não foi possível adicionar "
+                        "o artigo extra."
                     )
 
-                        st.exception(erro)
+                    st.exception(erro)
 
             artigos_extra = [
                 registo
@@ -5564,13 +5564,11 @@ if st.button(
                 if registo.get("origem") == "manual"
             ]
 
-        
+            if artigos_extra:
 
-
-
-        if artigos_extra:
-
-                st.markdown("**Artigos extra guardados**")
+                st.markdown(
+                    "**Artigos extra guardados**"
+                )
 
                 for artigo in artigos_extra:
 
@@ -5591,40 +5589,37 @@ if st.button(
                         if st.button(
                             "🗑️",
                             key=(
-                                f"apagar_extra_"
+                                f"apagar_artigo_extra_"
                                 f"{codigo_volta}_"
-                                f"{artigo.get('referencia')}"
+                                f"{artigo.get('id')}"
                             ),
-                            help="Eliminar artigo extra",
                         ):
 
                             try:
-
                                 eliminar_artigo_extra_volta_db(
                                     codigo_volta,
-                                    artigo.get("referencia"),
+                                    artigo.get("id"),
                                 )
 
                                 st.success(
-                                    "Artigo extra eliminado."
+                                    "Artigo extra apagado."
                                 )
 
                                 st.rerun()
 
                             except Exception as erro:
-
                                 st.error(
-                                    "Não foi possível eliminar "
+                                    "Não foi possível apagar "
                                     "o artigo extra."
                                 )
 
                                 st.exception(erro)
 
-        else:
+            else:
 
                 st.info(
                     "Ainda não existem artigos extra "
-                    "nesta volta."
+                    f"associados à volta {codigo_volta}."
                 )
 
 
