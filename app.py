@@ -5386,11 +5386,11 @@ elif pagina == "🚚 Voltas":
                         quantidade_extra,
         )
 
-                   st.success(
+                st.success(
                         "Artigo extra adicionado com sucesso."
         )
 
-                   st.rerun()
+                st.rerun()
 
                except Exception as erro:
                    st.error(
