@@ -512,7 +512,35 @@ if "dias_listagem" not in st.session_state:
 # =========================================================
 # FUNÇÕES GERAIS
 # =========================================================
+def obter_cliente_openai():
+    if OpenAI is None:
+        raise Exception("Biblioteca OpenAI não instalada.")
 
+    api_key = st.secrets.get("OPENAI_API_KEY")
+
+    if not api_key:
+        raise Exception("OPENAI_API_KEY não configurada.")
+
+    return OpenAI(api_key=api_key)
+
+
+def testar_openai():
+    try:
+        cliente = obter_cliente_openai()
+
+        resposta = cliente.responses.create(
+            model="gpt-4.1-mini",
+            input="Responde apenas com OK"
+        )
+
+        st.success("Ligação à OpenAI estabelecida.")
+
+        st.write(resposta.output_text)
+
+    except Exception as erro:
+        st.error("Erro ao ligar à OpenAI")
+        st.exception(erro)
+        
 def normalizar_texto(
     valor
 ):
@@ -5795,6 +5823,18 @@ else:
     st.title(
         "Definições"
     )
+
+    st.subheader(
+    "Teste da Inteligência Artificial"
+)
+
+if st.button(
+    "🤖 Testar ligação à OpenAI",
+    key="testar_openai",
+):
+    testar_openai()
+
+st.divider()
 
     st.session_state.dias_listagem = st.number_input(
 
