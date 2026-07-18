@@ -5510,9 +5510,9 @@ if st.button(
                     
         st.divider()
 
-            st.subheader("📦 Artigos extra")
+        st.subheader("📦 Artigos extra")
 
-            st.caption(
+        st.caption(
                 "Adiciona artigos que o vendedor leva, "
                 "mas que não aparecem na folha da volta."
             )
