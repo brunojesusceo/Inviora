@@ -5533,8 +5533,8 @@ if st.button(
                     "➕ Adicionar artigo extra",
                     use_container_width=True,
                 )
-
-            if adicionar_extra:
+                           
+                if adicionar_extra:
 
                 try:
                     guardar_artigo_extra_volta_db(
@@ -5563,6 +5563,10 @@ if st.button(
                 for registo in produtos_guardados
                 if registo.get("origem") == "manual"
             ]
+
+        
+
+
 
         if artigos_extra:
 
