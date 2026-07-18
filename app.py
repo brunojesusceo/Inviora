@@ -5351,51 +5351,52 @@ elif pagina == "🚚 Voltas":
             f"Volta {codigo_volta} — {estado_texto}"
         ):
 
-                        with st.form(
-                key=f"form_artigo_extra_{codigo_volta}"
-            ):
+                        with st.form(key=f"form_artigo_extra_{codigo_volta}"):
 
-                referencia_extra = st.text_input(
-                    "Referência",
-                    key=f"referencia_extra_{codigo_volta}",
-                )
+    referencia_extra = st.text_input(
+        "Referência",
+        key=f"referencia_extra_{codigo_volta}",
+    )
 
-                produto_extra = st.text_input(
-                    "Produto",
-                    key=f"produto_extra_{codigo_volta}",
-                )
+    produto_extra = st.text_input(
+        "Produto",
+        key=f"produto_extra_{codigo_volta}",
+    )
 
-                quantidade_extra = st.number_input(
-                    "Quantidade",
-                    min_value=1.0,
-                    step=1.0,
-                    value=1.0,
-                    key=f"quantidade_extra_{codigo_volta}",
-                )
+    quantidade_extra = st.number_input(
+        "Quantidade",
+        min_value=1.0,
+        step=1.0,
+        value=1.0,
+        key=f"quantidade_extra_{codigo_volta}",
+    )
 
-                adicionar_extra = st.form_submit_button(
-                    "➕ Adicionar artigo extra",
-                    use_container_width=True,
-                )
+    adicionar_extra = st.form_submit_button(
+        "➕ Adicionar artigo extra",
+        use_container_width=True,
+    )
 
-            if adicionar_extra:
+if adicionar_extra:
 
-                try:
+    try:
+        guardar_artigo_extra_volta_db(
+            codigo_volta,
+            referencia_extra,
+            produto_extra,
+            quantidade_extra,
+        )
 
-                    guardar_artigo_extra_volta_db(
-                        codigo_volta,
-                        referencia_extra,
-                        produto_extra,
-                        quantidade_extra,
-                    )
+        st.success(
+            "Artigo extra adicionado com sucesso."
+        )
 
-                    st.success(
-                        "Artigo extra adicionado com sucesso."
-                    )
+        st.rerun()
 
-                    st.rerun()
-
-                except Exception as erro:
+    except Exception as erro:
+        st.error(
+            "Não foi possível adicionar o artigo extra."
+        )
+        st.exception(erro)
 
                     st.error(
                         "Não foi possível adicionar o artigo extra."
