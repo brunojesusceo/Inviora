@@ -5534,10 +5534,9 @@ if st.button(
                     use_container_width=True,
                 )
 
-           if adicionar_extra:
+            if adicionar_extra:
 
                 try:
-
                     guardar_artigo_extra_volta_db(
                         codigo_volta,
                         referencia_extra,
@@ -5552,7 +5551,6 @@ if st.button(
                     st.rerun()
 
                 except Exception as erro:
-
                     st.error(
                         "Não foi possível adicionar "
                         "o artigo extra."
@@ -5560,7 +5558,7 @@ if st.button(
 
                     st.exception(erro)
 
-          artigos_extra = [
+            artigos_extra = [
                 registo
                 for registo in produtos_guardados
                 if registo.get("origem") == "manual"
