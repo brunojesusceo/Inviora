@@ -5508,7 +5508,7 @@ if st.button(
             erro
         )
                     
-            st.divider()
+        st.divider()
 
             st.subheader("📦 Artigos extra")
 
