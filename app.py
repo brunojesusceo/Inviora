@@ -7,10 +7,10 @@ import math
 import re
 import unicodedata
 import extra_streamlit_components as stx
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
+import easyocr
+import numpy as np
+from PIL import Image
+
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
