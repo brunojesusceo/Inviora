@@ -5418,137 +5418,95 @@ elif pagina == "🚚 Voltas":
             
              
             produtos_guardados = (
-                 carregar_produtos_volta_db(
-                     codigo_volta
-                 )
-             )
+    carregar_produtos_volta_db(
+        codigo_volta
+    )
+)
 
-            if produtos_guardados:
+produtos_manuais = [
+    registo
+    for registo in produtos_guardados
+    if registo.get("origem") == "volta_manual"
+]
 
-                 tabela_produtos = pd.DataFrame(
-                     produtos_guardados
-                 )
+if produtos_manuais:
 
-                 colunas_mostrar = [
-                     coluna
-                     for coluna in [
-                         "referencia",
-                         "produto",
-                         "quantidade",
-                     ]
-                     if coluna in tabela_produtos.columns
-                 ] 
+    tabela_inicial = pd.DataFrame(
+        produtos_manuais
+    )
 
-                 st.dataframe(
-                     tabela_produtos[
-                         colunas_mostrar
-                     ],
-                     use_container_width=True,
-                     hide_index=True,
-                 )
+    tabela_inicial = tabela_inicial[
+        [
+            "referencia",
+            "produto",
+            "quantidade",
+        ]
+    ]
 
-            else:
+else:
 
-                st.info(
-                    "Ainda não existem produtos "
-                    f"associados à volta {codigo_volta}."
-                )
+    tabela_inicial = pd.DataFrame(
+        columns=[
+            "referencia",
+            "produto",
+            "quantidade",
+        ]
+    )
 
-            ficheiro_volta = st.file_uploader(
-                "Carregar lista da volta",
-                type=[
-                    "xlsx",
-                    "csv",
-                ],
-                key=(
-                    f"upload_produtos_volta_"
-                    f"{codigo_volta}"
-                ),
+tabela_editada = st.data_editor(
+    tabela_inicial,
+    num_rows="dynamic",
+    use_container_width=True,
+    hide_index=True,
+    key=f"editor_produtos_volta_{codigo_volta}",
+    column_config={
+        "referencia": st.column_config.TextColumn(
+            "Referência",
+            required=True,
+        ),
+        "produto": st.column_config.TextColumn(
+            "Produto",
+        ),
+        "quantidade": st.column_config.NumberColumn(
+            "Quantidade",
+            min_value=0.0,
+            step=1.0,
+            format="%.0f",
+        ),
+    },
+)
+
+if st.button(
+    f"💾 Guardar produtos da volta {codigo_volta}",
+    key=f"guardar_produtos_manuais_{codigo_volta}",
+    use_container_width=True,
+):
+
+    try:
+
+        total_guardado = (
+            guardar_produtos_manuais_volta_db(
+                codigo_volta,
+                tabela_editada,
             )
+        )
 
-            if ficheiro_volta is not None:
+        st.success(
+            f"{total_guardado} produtos guardados "
+            f"na volta {codigo_volta}."
+        )
 
-                try:
+        st.rerun()
 
-                    dados_volta, _ = (
-                        ler_ficheiro_tabular(
-                            ficheiro_volta
-                        )
-                    )
+    except Exception as erro:
 
-                    dados_volta.columns = [
-                        normalizar_texto(
-                            coluna
-                        ).replace(
-                            " ",
-                            "_",
-                        )
-                        for coluna in dados_volta.columns
-                    ]
+        st.error(
+            "Não foi possível guardar os produtos da volta."
+        )
 
-                    colunas_obrigatorias = {
-                        "referencia",
-                        "quantidade",
-                    }
-
-                    if not colunas_obrigatorias.issubset(
-                        dados_volta.columns
-                    ):
-
-                        st.error(
-                            "O ficheiro precisa das colunas "
-                            "'referencia' e 'quantidade'. "
-                            "A coluna 'produto' é opcional."
-                        )
-
-                    else:
-
-                        if "produto" not in dados_volta.columns:
-                            dados_volta["produto"] = ""
-
-                        st.dataframe(
-                            dados_volta[
-                                [
-                                    "referencia",
-                                    "produto",
-                                    "quantidade",
-                                ]
-                            ],
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-
-                        if st.button(
-                            f"Guardar produtos da volta {codigo_volta}",
-                            key=(
-                                f"guardar_produtos_"
-                                f"{codigo_volta}"
-                            ),
-                            use_container_width=True,
-                        ):
-
-                            total_guardado = (
-                                substituir_produtos_volta_db(
-                                    codigo_volta,
-                                    dados_volta,
-                                )
-                            )
-
-                            st.success(
-                                f"{total_guardado} produtos "
-                                f"guardados na volta {codigo_volta}."
-                            )
-
-                            st.rerun()
-
-                except Exception as erro:
-
-                    st.error(
-                        "Não foi possível ler ou guardar "
-                        "a lista da volta."
-                    )
-
-                    st.exception(erro)
+        st.exception(
+            erro
+        )
                     
             st.divider()
 
