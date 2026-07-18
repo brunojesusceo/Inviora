@@ -511,23 +511,6 @@ if "dias_listagem" not in st.session_state:
 # FUNÇÕES GERAIS
 # =========================================================
 
-
-def testar_openai():
-    try:
-        cliente = obter_cliente_openai()
-
-        resposta = cliente.responses.create(
-            model="gpt-4.1-mini",
-            input="Responde apenas com OK"
-        )
-
-        st.success("Ligação à OpenAI estabelecida.")
-
-        st.write(resposta.output_text)
-
-    except Exception as erro:
-        st.error("Erro ao ligar à OpenAI")
-        st.exception(erro)
         
 def normalizar_texto(
     valor
@@ -2995,23 +2978,10 @@ def resposta_openai(
     contexto,
 ):
 
-    api_key = st.secrets.get(
-        "OPENAI_API_KEY",
-        "",
+    return resposta_regras(
+        contexto
     )
-
-    if (
-        not api_key
-        or OpenAI is None
-    ):
-
-        return resposta_regras(
-            contexto
-        )
-
-    cliente = OpenAI(
-        api_key=api_key
-    )
+   
 
     instrucoes = """
 És o Assistente Inviora, um copiloto de compras e stock.
@@ -3100,27 +3070,55 @@ def eliminar_fatura_db(
         .eq("id", int(fatura_id))
         .execute()
     )
-    def eliminar_todas_faturas_db():
-        supabase.table("fatura_linhas").delete().neq("id", 0).execute()
-        supabase.table("faturas").delete().neq("id", 0).execute()
-        return True
+def eliminar_todas_faturas_db():
+
+    (
+        supabase
+        .table("fatura_linhas")
+        .delete()
+        .neq("id", 0)
+        .execute()
+    )
+
+    (
+        supabase
+        .table("faturas")
+        .delete()
+        .neq("id", 0)
+        .execute()
+    )
+
+    return True
 
 
 def eliminar_todos_inventarios_db():
-    supabase.table("inventarios").delete().neq("id", 0).execute()
+
+    (
+        supabase
+        .table("inventarios")
+        .delete()
+        .neq("id", 0)
+        .execute()
+    )
 
     st.session_state.inventarios = {
         fornecedor: {
-            "Atual": None,
-            "Anterior": None,
+            periodo: {
+                dia: None
+                for dia in DIAS_SEMANA
+            }
+            for periodo in PERIODOS
         }
         for fornecedor in FORNECEDORES
     }
 
     st.session_state.nomes_ficheiros = {
         fornecedor: {
-            "Atual": None,
-            "Anterior": None,
+            periodo: {
+                dia: None
+                for dia in DIAS_SEMANA
+            }
+            for periodo in PERIODOS
         }
         for fornecedor in FORNECEDORES
     }
@@ -5294,17 +5292,15 @@ elif pagina == "🚚 Voltas":
     st.title("🚚 Voltas dos vendedores")
 
     st.caption(
-        "Configure o vendedor responsável, "
-        "os dias habituais e o estado de cada volta."
+        "Configure o vendedor responsável, os dias habituais, "
+        "os produtos e o estado de cada volta."
     )
 
     try:
         voltas_guardadas = carregar_voltas_db()
 
     except Exception as erro:
-        st.error(
-            "Não foi possível carregar as voltas."
-        )
+        st.error("Não foi possível carregar as voltas.")
         st.exception(erro)
         st.stop()
 
@@ -5317,7 +5313,7 @@ elif pagina == "🚚 Voltas":
 
         registo_volta = mapa_voltas.get(
             str(codigo_volta),
-            {}
+            {},
         )
 
         vendedor_atual = (
@@ -5336,9 +5332,11 @@ elif pagina == "🚚 Voltas":
             if dia in DIAS_SEMANA
         ]
 
-        ativa_atual = registo_volta.get(
-            "ativa",
-            True
+        ativa_atual = bool(
+            registo_volta.get(
+                "ativa",
+                True,
+            )
         )
 
         estado_texto = (
@@ -5351,159 +5349,190 @@ elif pagina == "🚚 Voltas":
             f"Volta {codigo_volta} — {estado_texto}"
         ):
 
-            with st.form(key=f"form_artigo_extra_{codigo_volta}"):
+            # ===============================================
+            # CONFIGURAÇÃO DA VOLTA
+            # ===============================================
 
-             referencia_extra = st.text_input(
-                 "Referência",
-                 key=f"referencia_extra_{codigo_volta}",
-    )
+            with st.form(
+                key=f"form_config_volta_{codigo_volta}"
+            ):
 
-             produto_extra = st.text_input(
-                 "Produto",
-                 key=f"produto_extra_{codigo_volta}",
-    )
+                vendedor = st.text_input(
+                    "Vendedor",
+                    value=vendedor_atual,
+                    key=f"vendedor_volta_{codigo_volta}",
+                )
 
-             quantidade_extra = st.number_input(
-                 "Quantidade",
-                 min_value=1.0,
-                 step=1.0,
-                 value=1.0,
-                 key=f"quantidade_extra_{codigo_volta}",
-    )
+                dias_semana = st.multiselect(
+                    "Dias habituais",
+                    DIAS_SEMANA,
+                    default=dias_atuais,
+                    key=f"dias_volta_{codigo_volta}",
+                )
 
-             adicionar_extra = st.form_submit_button(
-                 "➕ Adicionar artigo extra",
-                 use_container_width=True,
-    )
+                ativa = st.checkbox(
+                    "Volta ativa",
+                    value=ativa_atual,
+                    key=f"ativa_volta_{codigo_volta}",
+                )
 
-            if adicionar_extra:
+                guardar_configuracao = (
+                    st.form_submit_button(
+                        "💾 Guardar configuração",
+                        use_container_width=True,
+                    )
+                )
+
+            if guardar_configuracao:
 
                 try:
-                    guardar_artigo_extra_volta_db(
+                    guardar_volta_db(
                         codigo_volta,
-                        referencia_extra,
-                        produto_extra,
-                        quantidade_extra,
+                        vendedor,
+                        dias_semana,
+                        ativa,
                     )
 
                     st.success(
-                        "Artigo extra adicionado com sucesso."
+                        f"Volta {codigo_volta} guardada."
                     )
 
                     st.rerun()
 
                 except Exception as erro:
                     st.error(
-                        "Não foi possível adicionar o artigo extra."
+                        "Não foi possível guardar a volta."
                     )
-
                     st.exception(erro)
 
-                   
             st.divider()
 
-            st.subheader(
-                 "Produtos e quantidades"
+            # ===============================================
+            # PRODUTOS NORMAIS DA VOLTA
+            # ===============================================
+
+            st.subheader("Produtos e quantidades")
+
+            try:
+                produtos_guardados = (
+                    carregar_produtos_volta_db(
+                        codigo_volta
+                    )
+                )
+
+            except Exception as erro:
+                st.error(
+                    "Não foi possível carregar os produtos "
+                    "desta volta."
+                )
+                st.exception(erro)
+                produtos_guardados = []
+
+            produtos_manuais = [
+                registo
+                for registo in produtos_guardados
+                if registo.get("origem")
+                == "volta_manual"
+            ]
+
+            if produtos_manuais:
+
+                tabela_inicial = pd.DataFrame(
+                    produtos_manuais
+                )
+
+                tabela_inicial = tabela_inicial[
+                    [
+                        "referencia",
+                        "produto",
+                        "quantidade",
+                    ]
+                ]
+
+            else:
+
+                tabela_inicial = pd.DataFrame(
+                    columns=[
+                        "referencia",
+                        "produto",
+                        "quantidade",
+                    ]
+                )
+
+            tabela_editada = st.data_editor(
+                tabela_inicial,
+                num_rows="dynamic",
+                width="stretch",
+                hide_index=True,
+                key=(
+                    f"editor_produtos_volta_"
+                    f"{codigo_volta}"
+                ),
+                column_config={
+                    "referencia":
+                        st.column_config.TextColumn(
+                            "Referência",
+                            required=True,
+                        ),
+                    "produto":
+                        st.column_config.TextColumn(
+                            "Produto",
+                        ),
+                    "quantidade":
+                        st.column_config.NumberColumn(
+                            "Quantidade",
+                            min_value=0.0,
+                            step=1.0,
+                            format="%.0f",
+                        ),
+                },
             )
-            
-             
-            produtos_guardados = (
-    carregar_produtos_volta_db(
-        codigo_volta
-    )
-)
 
-produtos_manuais = [
-    registo
-    for registo in produtos_guardados
-    if registo.get("origem") == "volta_manual"
-]
+            if st.button(
+                (
+                    "💾 Guardar produtos da volta "
+                    f"{codigo_volta}"
+                ),
+                key=(
+                    "guardar_produtos_manuais_"
+                    f"{codigo_volta}"
+                ),
+                width="stretch",
+            ):
 
-if produtos_manuais:
+                try:
+                    total_guardado = (
+                        guardar_produtos_manuais_volta_db(
+                            codigo_volta,
+                            tabela_editada,
+                        )
+                    )
 
-    tabela_inicial = pd.DataFrame(
-        produtos_manuais
-    )
+                    st.success(
+                        f"{total_guardado} produtos guardados "
+                        f"na volta {codigo_volta}."
+                    )
 
-    tabela_inicial = tabela_inicial[
-        [
-            "referencia",
-            "produto",
-            "quantidade",
-        ]
-    ]
+                    st.rerun()
 
-else:
+                except Exception as erro:
+                    st.error(
+                        "Não foi possível guardar os produtos "
+                        "da volta."
+                    )
+                    st.exception(erro)
 
-    tabela_inicial = pd.DataFrame(
-        columns=[
-            "referencia",
-            "produto",
-            "quantidade",
-        ]
-    )
-
-tabela_editada = st.data_editor(
-    tabela_inicial,
-    num_rows="dynamic",
-    use_container_width=True,
-    hide_index=True,
-    key=f"editor_produtos_volta_{codigo_volta}",
-    column_config={
-        "referencia": st.column_config.TextColumn(
-            "Referência",
-            required=True,
-        ),
-        "produto": st.column_config.TextColumn(
-            "Produto",
-        ),
-        "quantidade": st.column_config.NumberColumn(
-            "Quantidade",
-            min_value=0.0,
-            step=1.0,
-            format="%.0f",
-        ),
-    },
-)
-
-if st.button(
-    f"💾 Guardar produtos da volta {codigo_volta}",
-    key=f"guardar_produtos_manuais_{codigo_volta}",
-    use_container_width=True,
-):
-
-    try:
-
-        total_guardado = (
-            guardar_produtos_manuais_volta_db(
-                codigo_volta,
-                tabela_editada,
-            )
-        )
-
-        st.success(
-            f"{total_guardado} produtos guardados "
-            f"na volta {codigo_volta}."
-        )
-
-        st.rerun()
-
-    except Exception as erro:
-
-        st.error(
-            "Não foi possível guardar os produtos da volta."
-        )
-
-        st.exception(
-            erro
-        )
             st.divider()
+
+            # ===============================================
+            # ARTIGOS EXTRA
+            # ===============================================
 
             st.subheader("📦 Artigos extra")
 
             st.caption(
                 "Adiciona artigos que o vendedor leva, "
-                "mas que não aparecem na folha da volta."
+                "mas que não fazem parte da lista principal."
             )
 
             with st.form(
@@ -5512,12 +5541,18 @@ if st.button(
 
                 referencia_extra = st.text_input(
                     "Referência",
-                    key=f"referencia_extra_{codigo_volta}",
+                    key=(
+                        f"referencia_extra_"
+                        f"{codigo_volta}"
+                    ),
                 )
 
                 produto_extra = st.text_input(
                     "Produto",
-                    key=f"produto_extra_{codigo_volta}",
+                    key=(
+                        f"produto_extra_"
+                        f"{codigo_volta}"
+                    ),
                 )
 
                 quantidade_extra = st.number_input(
@@ -5525,37 +5560,49 @@ if st.button(
                     min_value=1.0,
                     step=1.0,
                     value=1.0,
-                    key=f"quantidade_extra_{codigo_volta}",
+                    key=(
+                        f"quantidade_extra_"
+                        f"{codigo_volta}"
+                    ),
                 )
 
-                adicionar_extra = st.form_submit_button(
-                    "➕ Adicionar artigo extra",
-                    use_container_width=True,
+                adicionar_extra = (
+                    st.form_submit_button(
+                        "➕ Adicionar artigo extra",
+                        use_container_width=True,
+                    )
                 )
 
             if adicionar_extra:
 
-                try:
-                    guardar_artigo_extra_volta_db(
-                        codigo_volta,
-                        referencia_extra,
-                        produto_extra,
-                        quantidade_extra,
-                    )
+                if not referencia_extra.strip():
 
-                    st.success(
-                        "Artigo extra adicionado com sucesso."
-                    )
-
-                    st.rerun()
-
-                except Exception as erro:
                     st.error(
-                        "Não foi possível adicionar "
-                        "o artigo extra."
+                        "A referência é obrigatória."
                     )
 
-                    st.exception(erro)
+                else:
+
+                    try:
+                        guardar_artigo_extra_volta_db(
+                            codigo_volta,
+                            referencia_extra.strip(),
+                            produto_extra.strip(),
+                            quantidade_extra,
+                        )
+
+                        st.success(
+                            "Artigo extra adicionado."
+                        )
+
+                        st.rerun()
+
+                    except Exception as erro:
+                        st.error(
+                            "Não foi possível adicionar "
+                            "o artigo extra."
+                        )
+                        st.exception(erro)
 
             artigos_extra = [
                 registo
@@ -5569,18 +5616,25 @@ if st.button(
                     "**Artigos extra guardados**"
                 )
 
-                for artigo in artigos_extra:
+                for indice, artigo in enumerate(
+                    artigos_extra
+                ):
 
-                    coluna_info, coluna_apagar = st.columns(
-                        [5, 1]
+                    coluna_info, coluna_apagar = (
+                        st.columns(
+                            [5, 1]
+                        )
                     )
 
                     with coluna_info:
 
                         st.write(
-                            f"**{artigo.get('referencia', '')}** — "
-                            f"{artigo.get('produto') or 'Sem nome'} — "
-                            f"{artigo.get('quantidade', 0)} unidades"
+                            f"**{artigo.get('referencia', '')}**"
+                            " — "
+                            f"{artigo.get('produto') or 'Sem nome'}"
+                            " — "
+                            f"{artigo.get('quantidade', 0)} "
+                            "unidades"
                         )
 
                     with coluna_apagar:
@@ -5588,30 +5642,33 @@ if st.button(
                         if st.button(
                             "🗑️",
                             key=(
-                                f"apagar_artigo_extra_"
+                                "apagar_artigo_extra_"
                                 f"{codigo_volta}_"
-                                f"{artigo.get('id')}"
+                                f"{indice}_"
+                                f"{artigo.get('referencia')}"
                             ),
+                            help="Eliminar artigo extra",
                         ):
 
                             try:
                                 eliminar_artigo_extra_volta_db(
                                     codigo_volta,
-                                    artigo.get("id"),
+                                    artigo.get(
+                                        "referencia"
+                                    ),
                                 )
 
                                 st.success(
-                                    "Artigo extra apagado."
+                                    "Artigo extra eliminado."
                                 )
 
                                 st.rerun()
 
                             except Exception as erro:
                                 st.error(
-                                    "Não foi possível apagar "
+                                    "Não foi possível eliminar "
                                     "o artigo extra."
                                 )
-
                                 st.exception(erro)
 
             else:
