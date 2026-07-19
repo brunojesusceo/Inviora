@@ -2435,18 +2435,122 @@ def atualizar_fornecedores_db(
 # CÁLCULO DA ENCOMENDA
 # =========================================================
 
+def obter_regra_logista():
+
+    hoje = hoje_portugal()
+
+    regras = {
+        0: {
+            "dia_encomenda": "Segunda-feira",
+            "dia_inventario_anterior": "Terça-feira",
+            "historico": (
+                "Segunda-feira + terça-feira "
+                "da semana anterior"
+            ),
+            "entrega_em_dias": 1,
+            "dias_cobertura": [1],
+            "cobertura": "Terça-feira",
+        },
+        1: {
+            "dia_encomenda": "Terça-feira",
+            "dia_inventario_anterior": "Quarta-feira",
+            "historico": (
+                "Terça-feira + quarta-feira "
+                "da semana anterior"
+            ),
+            "entrega_em_dias": 1,
+            "dias_cobertura": [1],
+            "cobertura": "Quarta-feira",
+        },
+        2: {
+            "dia_encomenda": "Quarta-feira",
+            "dia_inventario_anterior": "Quinta-feira",
+            "historico": (
+                "Quarta-feira + quinta-feira "
+                "da semana anterior"
+            ),
+            "entrega_em_dias": 1,
+            "dias_cobertura": [1],
+            "cobertura": "Quinta-feira",
+        },
+        3: {
+            "dia_encomenda": "Quinta-feira",
+            "dia_inventario_anterior": "Sexta-feira",
+            "historico": (
+                "Quinta-feira + sexta-feira "
+                "da semana anterior"
+            ),
+            "entrega_em_dias": 1,
+            "dias_cobertura": [1, 2],
+            "cobertura": "Sexta-feira + sábado",
+        },
+        4: {
+            "dia_encomenda": "Sexta-feira",
+            "dia_inventario_anterior": "Segunda-feira",
+            "historico": (
+                "Sexta-feira + sábado + segunda-feira "
+                "da semana anterior"
+            ),
+            "entrega_em_dias": 3,
+            "dias_cobertura": [3],
+            "cobertura": "Segunda-feira",
+        },
+    }
+
+    return regras.get(
+        hoje.weekday()
+    )
+
+
 def calcular_encomenda(
     fornecedor
 ):
 
-    (
-    atual,
-    anterior,
-    dia_atual,
-    dia_referencia,
-) = obter_inventarios_para_calculo(
-    fornecedor
-)
+    if str(
+        fornecedor
+    ).strip().casefold() != "logista":
+
+        return (
+            None,
+            (
+                "A nova lógica diária está, para já, "
+                "disponível apenas para a Logista."
+            ),
+        )
+
+    regra = obter_regra_logista()
+
+    if regra is None:
+
+        return (
+            None,
+            (
+                "As encomendas normais da Logista "
+                "são calculadas de segunda a sexta-feira."
+            ),
+        )
+
+    hoje = hoje_portugal()
+
+    dia_atual = regra[
+        "dia_encomenda"
+    ]
+
+    dia_referencia = regra[
+        "dia_inventario_anterior"
+    ]
+
+    atual = obter_inventario(
+        fornecedor,
+        "Atual",
+        dia_atual,
+    )
+
+    anterior = obter_inventario(
+        fornecedor,
+        "Anterior",
+        dia_referencia,
+    )
 
     if atual is None:
 
@@ -2454,7 +2558,18 @@ def calcular_encomenda(
             None,
             (
                 f"Falta carregar {fornecedor} — "
-                f"Atual — {dia_atual}."
+                f"Stock atual — {dia_atual}."
+            ),
+        )
+
+    if anterior is None:
+
+        return (
+            None,
+            (
+                f"Falta carregar {fornecedor} — "
+                f"Vendas de referência — "
+                f"{dia_referencia}."
             ),
         )
 
@@ -2462,272 +2577,315 @@ def calcular_encomenda(
         atual
     )
 
-    if not {
-
-        "saidas",
-        "stock_final",
-
-    }.issubset(
-        atual.columns
-    ):
-
-        return (
-
-            None,
-
-            "A listagem precisa das colunas "
-            "Saídas e Stock Final.",
-        )
-
-    chave = (
-
-        "referencia"
-
-        if "referencia"
-        in atual.columns
-
-        else "produto"
+    anterior = garantir_produto(
+        anterior
     )
 
+    if "stock_final" not in atual.columns:
+
+        return (
+            None,
+            (
+                "A listagem de stock atual precisa "
+                "da coluna Stock Final."
+            ),
+        )
+
+    if "saidas" not in anterior.columns:
+
+        return (
+            None,
+            (
+                "A listagem de vendas de referência "
+                "precisa da coluna Saídas."
+            ),
+        )
+
+    if (
+        "referencia" in atual.columns
+        and "referencia" in anterior.columns
+    ):
+
+        chave = "referencia"
+
+    else:
+
+        chave = "produto"
+
     atuais = atual.groupby(
-
         chave,
-
         as_index=False,
-
     ).agg(
-
-        produto=(
+        produto_atual=(
             "produto",
             "first",
         ),
-
-        saidas_atual=(
-            "saidas",
-            "sum",
-        ),
-
         stock_phc=(
             "stock_final",
             "sum",
         ),
     )
 
-    if (
+    historico = anterior.groupby(
+        chave,
+        as_index=False,
+    ).agg(
+        produto_historico=(
+            "produto",
+            "first",
+        ),
+        vendas_referencia=(
+            "saidas",
+            "sum",
+        ),
+    )
 
-        anterior is not None
-
-        and "saidas"
-        in anterior.columns
-
-        and chave
-        in anterior.columns
-    ):
-
-        anterior = garantir_produto(
-            anterior
-        )
-
-        anteriores = anterior.groupby(
-
-            chave,
-
-            as_index=False,
-
-        ).agg(
-
-            saidas_anterior=(
-                "saidas",
-                "sum",
-            )
-        )
-
-        resultado = atuais.merge(
-
-            anteriores,
-
-            on=chave,
-
-            how="left",
-        )
-
-    else:
-
-        resultado = atuais.copy()
-
-        resultado[
-            "saidas_anterior"
-        ] = 0
+    resultado = atuais.merge(
+        historico,
+        on=chave,
+        how="outer",
+    )
 
     resultado[
-        "saidas_anterior"
+        "produto"
     ] = resultado[
-        "saidas_anterior"
+        "produto_atual"
     ].fillna(
+        resultado[
+            "produto_historico"
+        ]
+    )
+
+    resultado[
+        "stock_phc"
+    ] = pd.to_numeric(
+        resultado[
+            "stock_phc"
+        ],
+        errors="coerce",
+    ).fillna(
         0
     )
 
-    if anterior is None:
-
-        resultado[
-            "vendas_periodo"
-        ] = resultado[
-            "saidas_atual"
-        ]
-
-    else:
-
-        resultado[
-            "vendas_periodo"
-        ] = (
-
-            resultado[
-                "saidas_atual"
-            ] * 0.65
-
-            + resultado[
-                "saidas_anterior"
-            ] * 0.35
-        )
-
     resultado[
-        "media_dia"
-    ] = (
-
+        "vendas_referencia"
+    ] = pd.to_numeric(
         resultado[
-            "vendas_periodo"
-        ]
+            "vendas_referencia"
+        ],
+        errors="coerce",
+    ).fillna(
+        0
+    )
 
-        / float(
-
-            st.session_state.dias_listagem
+    datas_cobertas = [
+        hoje + timedelta(
+            days=dias
         )
+        for dias in regra[
+            "dias_cobertura"
+        ]
+    ]
+
+    ultima_data_coberta = max(
+        datas_cobertas
     )
 
     resultado[
-        "autonomia_dias"
-    ] = resultado.apply(
+        "faturas_posteriores"
+    ] = 0.0
 
-        lambda linha: (
+    try:
 
-            linha[
-                "stock_phc"
+        faturas = carregar_faturas_db()
+
+        if not faturas.empty:
+
+            faturas = faturas.copy()
+
+            faturas = faturas[
+                faturas[
+                    "fornecedor"
+                ]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .str.casefold()
+                ==
+                str(
+                    fornecedor
+                )
+                .strip()
+                .casefold()
             ]
 
-            / linha[
-                "media_dia"
+            faturas = faturas[
+                faturas[
+                    "data_saida"
+                ].notna()
             ]
 
-            if linha[
-                "media_dia"
-            ] > 0
+            faturas = faturas[
+                faturas[
+                    "data_saida"
+                ] > ultima_data_coberta
+            ]
 
-            else 999.0
-        ),
+            if not faturas.empty:
 
-        axis=1,
-    )
+                if chave == "referencia":
 
-    objetivo = float(
+                    faturas[
+                        "referencia"
+                    ] = faturas[
+                        "referencia"
+                    ].map(
+                        normalizar_referencia
+                    )
 
-        st.session_state.dias_objetivo[
-            fornecedor
-        ]
-    )
+                faturas_posteriores = (
+                    faturas.groupby(
+                        chave,
+                        as_index=False,
+                    )
+                    .agg(
+                        faturas_posteriores=(
+                            "quantidade",
+                            "sum",
+                        )
+                    )
+                )
 
-    margem = float(
+                resultado = resultado.merge(
+                    faturas_posteriores,
+                    on=chave,
+                    how="left",
+                    suffixes=(
+                        "",
+                        "_nova",
+                    ),
+                )
 
-        st.session_state.margem_dias[
-            fornecedor
-        ]
+                if (
+                    "faturas_posteriores_nova"
+                    in resultado.columns
+                ):
+
+                    resultado[
+                        "faturas_posteriores"
+                    ] = resultado[
+                        "faturas_posteriores_nova"
+                    ]
+
+                    resultado = resultado.drop(
+                        columns=[
+                            "faturas_posteriores_nova"
+                        ]
+                    )
+
+    except Exception:
+
+        resultado[
+            "faturas_posteriores"
+        ] = 0.0
+
+    resultado[
+        "faturas_posteriores"
+    ] = pd.to_numeric(
+        resultado[
+            "faturas_posteriores"
+        ],
+        errors="coerce",
+    ).fillna(
+        0
     )
 
     resultado[
-        "objetivo_dias"
-    ] = objetivo + margem
-
-    resultado[
-        "stock_alvo"
+        "stock_ajustado"
     ] = (
-
         resultado[
-            "media_dia"
-        ]
-
-        * resultado[
-            "objetivo_dias"
-        ]
-    )
-
-    necessidade = (
-
-        resultado[
-            "stock_alvo"
-        ]
-
-        - resultado[
             "stock_phc"
         ]
+        +
+        resultado[
+            "faturas_posteriores"
+        ]
+    )
 
+    resultado[
+        "necessidade"
+    ] = resultado[
+        "vendas_referencia"
+    ]
+
+    necessidade_encomenda = (
+        resultado[
+            "necessidade"
+        ]
+        -
+        resultado[
+            "stock_ajustado"
+        ]
     ).clip(
         lower=0
     )
 
     multiplo = max(
-
         int(
-
-            st.session_state.multiplo[
-                fornecedor
-            ]
+            st.session_state.multiplo.get(
+                fornecedor,
+                1,
+            )
         ),
-
         1,
     )
 
     resultado[
         "sugestao"
-    ] = necessidade.apply(
-
+    ] = necessidade_encomenda.apply(
         lambda quantidade: (
-
             int(
-
                 math.ceil(
-
                     quantidade
                     / multiplo
-
-                ) * multiplo
+                )
+                * multiplo
             )
-
             if quantidade > 0
-
             else 0
         )
     )
 
     resultado[
+        "explicacao"
+    ] = resultado.apply(
+        lambda linha: (
+            f"{formatar_numero(linha['vendas_referencia'])} "
+            f"de referência − "
+            f"{formatar_numero(linha['stock_phc'])} "
+            f"em stock PHC"
+            +
+            (
+                f" + {formatar_numero(linha['faturas_posteriores'])} "
+                f"de faturas com saída posterior"
+                if linha[
+                    "faturas_posteriores"
+                ] > 0
+                else ""
+            )
+        ),
+        axis=1,
+    )
+
+    resultado[
         "estado_stock"
     ] = resultado[
-        "autonomia_dias"
+        "sugestao"
     ].apply(
-
-        lambda dias: (
-
-            "🔴 Termina hoje"
-
-            if dias < 1
-
-            else "🟠 Termina amanhã"
-
-            if dias < 2
-
-            else "🟡 Menos de 3 dias"
-
-            if dias < 3
-
-            else "🟢 Cobertura suficiente"
+        lambda quantidade: (
+            "🔴 Encomendar"
+            if quantidade > 0
+            else "🟢 Stock suficiente"
         )
     )
 
@@ -2735,23 +2893,44 @@ def calcular_encomenda(
         "fornecedor"
     ] = fornecedor
 
+    resultado[
+        "data_encomenda"
+    ] = hoje
+
+    resultado[
+        "data_entrega"
+    ] = hoje + timedelta(
+        days=regra[
+            "entrega_em_dias"
+        ]
+    )
+
+    colunas_remover = [
+        "produto_atual",
+        "produto_historico",
+    ]
+
+    resultado = resultado.drop(
+        columns=[
+            coluna
+            for coluna in colunas_remover
+            if coluna in resultado.columns
+        ]
+    )
+
     return (
-
         resultado.sort_values(
-
             [
-                "autonomia_dias",
                 "sugestao",
+                "vendas_referencia",
             ],
-
             ascending=[
-                True,
+                False,
                 False,
             ],
         ).reset_index(
             drop=True
         ),
-
         None,
     )
 # =========================================================
@@ -5140,15 +5319,45 @@ elif pagina == "📅 Calendário":
 elif pagina == "📦 Encomendas":
 
     st.title(
-        "Encomendas"
+        "📦 Encomendas"
     )
 
     fornecedor = st.selectbox(
-
         "Fornecedor do pedido",
-
         FORNECEDORES,
     )
+
+    if str(
+        fornecedor
+    ).strip().casefold() == "logista":
+
+        regra = obter_regra_logista()
+
+        if regra is not None:
+
+            hoje = hoje_portugal()
+
+            data_entrega = (
+                hoje
+                + timedelta(
+                    days=regra[
+                        "entrega_em_dias"
+                    ]
+                )
+            )
+
+            st.info(
+                (
+                    f"**Encomenda de "
+                    f"{regra['dia_encomenda']}**  \n"
+                    f"Receção prevista: "
+                    f"**{data_entrega.strftime('%d/%m/%Y')}**  \n"
+                    f"Cobertura: "
+                    f"**{regra['cobertura']}**  \n"
+                    f"Vendas de referência: "
+                    f"**{regra['historico']}**"
+                )
+            )
 
     resultado, erro = calcular_encomenda(
         fornecedor
@@ -5163,9 +5372,7 @@ elif pagina == "📦 Encomendas":
         st.stop()
 
     mostrar_apenas = st.toggle(
-
         "Mostrar apenas produtos a encomendar",
-
         value=True,
     )
 
@@ -5174,7 +5381,6 @@ elif pagina == "📦 Encomendas":
     if mostrar_apenas:
 
         tabela = tabela[
-
             tabela[
                 "sugestao"
             ] > 0
@@ -5185,11 +5391,8 @@ elif pagina == "📦 Encomendas":
     )
 
     coluna1.metric(
-
         "Produtos a encomendar",
-
         int(
-
             (
                 resultado[
                     "sugestao"
@@ -5199,85 +5402,83 @@ elif pagina == "📦 Encomendas":
     )
 
     coluna2.metric(
-
         "Quantidade sugerida",
-
         formatar_numero(
-
             resultado[
                 "sugestao"
             ].sum()
         ),
     )
 
-    autonomias_validas = resultado.loc[
-
-        resultado[
-            "autonomia_dias"
-        ] < 999,
-
-        "autonomia_dias",
-    ]
-
     coluna3.metric(
-
-        "Autonomia média",
-
-        (
-            f"{formatar_numero(autonomias_validas.mean(), 1)} dias"
-
-            if not autonomias_validas.empty
-
-            else "0 dias"
+        "Faturas repostas temporariamente",
+        formatar_numero(
+            resultado[
+                "faturas_posteriores"
+            ].sum()
         ),
     )
 
     colunas = [
         "referencia",
         "produto",
+        "vendas_referencia",
         "stock_phc",
-        "media_dia",
-        "autonomia_dias",
-        "objetivo_dias",
-        "stock_alvo",
+        "faturas_posteriores",
+        "stock_ajustado",
         "sugestao",
         "estado_stock",
+        "explicacao",
     ]
 
+    nomes_colunas = {
+        "referencia": "Referência",
+        "produto": "Produto",
+        "vendas_referencia": "Vendas de referência",
+        "stock_phc": "Stock PHC",
+        "faturas_posteriores": (
+            "Faturas com saída posterior"
+        ),
+        "stock_ajustado": "Stock ajustado",
+        "sugestao": "Encomendar",
+        "estado_stock": "Estado",
+        "explicacao": "Cálculo",
+    }
+
+    tabela_visual = tabela[
+        colunas
+    ].rename(
+        columns=nomes_colunas
+    )
+
     st.dataframe(
-
-        tabela[
-            colunas
-        ],
-
-        use_container_width=True,
-
+        tabela_visual,
+        width="stretch",
         hide_index=True,
     )
 
+    st.caption(
+        (
+            "As faturas cuja saída acontece depois do período "
+            "coberto são temporariamente adicionadas ao stock. "
+            "As voltas não são adicionadas porque o stock já saiu "
+            "fisicamente do armazém e já está refletido no PHC."
+        )
+    )
+
     st.download_button(
-
         f"⬇️ Exportar pedido {fornecedor}",
-
         data=converter_para_excel(
-
-            tabela[
-                colunas
-            ],
-
+            tabela_visual,
             f"Pedido {fornecedor}",
         ),
-
         file_name=(
-
             f"encomenda_"
             f"{fornecedor}_"
             f"{hoje_portugal().isoformat()}"
             f".xlsx"
         ),
-
         mime=(
-
             "application/vnd.openxmlformats-"
             "officedocument.spreadsheetml.sheet"
         ),
