@@ -2435,12 +2435,13 @@ def atualizar_fornecedores_db(
 # CÁLCULO DA ENCOMENDA
 # =========================================================
 
-def obter_regra_logista():
-
-    hoje = hoje_portugal()
+def obter_regra_logista(
+    dia_encomenda=None,
+):
 
     regras = {
-        0: {
+        "Segunda-feira": {
+            "indice_semana": 0,
             "dia_encomenda": "Segunda-feira",
             "dia_inventario_anterior": "Terça-feira",
             "historico": (
@@ -2451,7 +2452,8 @@ def obter_regra_logista():
             "dias_cobertura": [1],
             "cobertura": "Terça-feira",
         },
-        1: {
+        "Terça-feira": {
+            "indice_semana": 1,
             "dia_encomenda": "Terça-feira",
             "dia_inventario_anterior": "Quarta-feira",
             "historico": (
@@ -2462,7 +2464,8 @@ def obter_regra_logista():
             "dias_cobertura": [1],
             "cobertura": "Quarta-feira",
         },
-        2: {
+        "Quarta-feira": {
+            "indice_semana": 2,
             "dia_encomenda": "Quarta-feira",
             "dia_inventario_anterior": "Quinta-feira",
             "historico": (
@@ -2473,7 +2476,8 @@ def obter_regra_logista():
             "dias_cobertura": [1],
             "cobertura": "Quinta-feira",
         },
-        3: {
+        "Quinta-feira": {
+            "indice_semana": 3,
             "dia_encomenda": "Quinta-feira",
             "dia_inventario_anterior": "Sexta-feira",
             "historico": (
@@ -2484,7 +2488,8 @@ def obter_regra_logista():
             "dias_cobertura": [1, 2],
             "cobertura": "Sexta-feira + sábado",
         },
-        4: {
+        "Sexta-feira": {
+            "indice_semana": 4,
             "dia_encomenda": "Sexta-feira",
             "dia_inventario_anterior": "Segunda-feira",
             "historico": (
@@ -2497,18 +2502,149 @@ def obter_regra_logista():
         },
     }
 
+    if dia_encomenda is None:
+
+        hoje = hoje_portugal()
+
+        nomes_por_indice = {
+            0: "Segunda-feira",
+            1: "Terça-feira",
+            2: "Quarta-feira",
+            3: "Quinta-feira",
+            4: "Sexta-feira",
+        }
+
+        dia_encomenda = nomes_por_indice.get(
+            hoje.weekday(),
+            "Segunda-feira",
+        )
+
     return regras.get(
+        dia_encomenda
+    )
+
+
+def obter_data_operacional_logista(
+    dia_encomenda,
+):
+
+    hoje = hoje_portugal()
+
+    regra = obter_regra_logista(
+        dia_encomenda
+    )
+
+    if regra is None:
+        return hoje
+
+    dias_ate_encomenda = (
+        regra[
+            "indice_semana"
+        ]
+        -
         hoje.weekday()
+    ) % 7
+
+    return hoje + timedelta(
+        days=dias_ate_encomenda
+    )
+
+
+def obter_stock_logista(
+    fornecedor,
+    dia_pretendido,
+    usar_stock_mais_recente=True,
+):
+
+    stock = obter_inventario(
+        fornecedor,
+        "Atual",
+        dia_pretendido,
+    )
+
+    if stock is not None:
+
+        return (
+            stock,
+            dia_pretendido,
+            False,
+        )
+
+    if not usar_stock_mais_recente:
+
+        return (
+            None,
+            dia_pretendido,
+            False,
+        )
+
+    nomes_por_indice = {
+        0: "Segunda-feira",
+        1: "Terça-feira",
+        2: "Quarta-feira",
+        3: "Quinta-feira",
+        4: "Sexta-feira",
+        5: "Sábado",
+        6: "Domingo",
+    }
+
+    regra = obter_regra_logista(
+        dia_pretendido
+    )
+
+    indice_pretendido = regra[
+        "indice_semana"
+    ]
+
+    for recuo in range(
+        1,
+        8,
+    ):
+
+        indice_stock = (
+            indice_pretendido
+            - recuo
+        ) % 7
+
+        dia_stock = nomes_por_indice[
+            indice_stock
+        ]
+
+        stock = obter_inventario(
+            fornecedor,
+            "Atual",
+            dia_stock,
+        )
+
+        if stock is not None:
+
+            return (
+                stock,
+                dia_stock,
+                True,
+            )
+
+    return (
+        None,
+        dia_pretendido,
+        False,
     )
 
 
 def calcular_encomenda(
-    fornecedor
+    fornecedor,
+    dia_encomenda=None,
+    usar_stock_mais_recente=True,
 ):
 
-    if str(
-        fornecedor
-    ).strip().casefold() != "logista":
+    if (
+        str(
+            fornecedor
+        )
+        .strip()
+        .casefold()
+        != "logista"
+    ):
 
         return (
             None,
@@ -2518,32 +2654,39 @@ def calcular_encomenda(
             ),
         )
 
-    regra = obter_regra_logista()
+    regra = obter_regra_logista(
+        dia_encomenda
+    )
 
     if regra is None:
 
         return (
             None,
-            (
-                "As encomendas normais da Logista "
-                "são calculadas de segunda a sexta-feira."
-            ),
+            "Seleciona um dia de encomenda válido.",
         )
 
-    hoje = hoje_portugal()
-
-    dia_atual = regra[
-        "dia_encomenda"
-    ]
+    data_encomenda = (
+        obter_data_operacional_logista(
+            regra[
+                "dia_encomenda"
+            ]
+        )
+    )
 
     dia_referencia = regra[
         "dia_inventario_anterior"
     ]
 
-    atual = obter_inventario(
+    (
+        atual,
+        dia_stock_usado,
+        stock_provisorio,
+    ) = obter_stock_logista(
         fornecedor,
-        "Atual",
-        dia_atual,
+        regra[
+            "dia_encomenda"
+        ],
+        usar_stock_mais_recente,
     )
 
     anterior = obter_inventario(
@@ -2558,7 +2701,8 @@ def calcular_encomenda(
             None,
             (
                 f"Falta carregar {fornecedor} — "
-                f"Stock atual — {dia_atual}."
+                f"Stock atual — "
+                f"{regra['dia_encomenda']}."
             ),
         )
 
@@ -2679,7 +2823,8 @@ def calcular_encomenda(
     )
 
     datas_cobertas = [
-        hoje + timedelta(
+        data_encomenda
+        + timedelta(
             days=dias
         )
         for dias in regra[
@@ -2749,7 +2894,7 @@ def calcular_encomenda(
                         as_index=False,
                     )
                     .agg(
-                        faturas_posteriores=(
+                        faturas_posteriores_nova=(
                             "quantidade",
                             "sum",
                         )
@@ -2760,28 +2905,21 @@ def calcular_encomenda(
                     faturas_posteriores,
                     on=chave,
                     how="left",
-                    suffixes=(
-                        "",
-                        "_nova",
-                    ),
                 )
 
-                if (
+                resultado[
+                    "faturas_posteriores"
+                ] = resultado[
                     "faturas_posteriores_nova"
-                    in resultado.columns
-                ):
+                ].fillna(
+                    0
+                )
 
-                    resultado[
-                        "faturas_posteriores"
-                    ] = resultado[
+                resultado = resultado.drop(
+                    columns=[
                         "faturas_posteriores_nova"
                     ]
-
-                    resultado = resultado.drop(
-                        columns=[
-                            "faturas_posteriores_nova"
-                        ]
-                    )
+                )
 
     except Exception:
 
@@ -2812,15 +2950,9 @@ def calcular_encomenda(
         ]
     )
 
-    resultado[
-        "necessidade"
-    ] = resultado[
-        "vendas_referencia"
-    ]
-
     necessidade_encomenda = (
         resultado[
-            "necessidade"
+            "vendas_referencia"
         ]
         -
         resultado[
@@ -2895,25 +3027,36 @@ def calcular_encomenda(
 
     resultado[
         "data_encomenda"
-    ] = hoje
+    ] = data_encomenda
 
     resultado[
         "data_entrega"
-    ] = hoje + timedelta(
-        days=regra[
-            "entrega_em_dias"
-        ]
+    ] = (
+        data_encomenda
+        + timedelta(
+            days=regra[
+                "entrega_em_dias"
+            ]
+        )
     )
 
-    colunas_remover = [
-        "produto_atual",
-        "produto_historico",
-    ]
+    resultado[
+        "dia_stock_usado"
+    ] = dia_stock_usado
+
+    resultado[
+        "stock_provisorio"
+    ] = bool(
+        stock_provisorio
+    )
 
     resultado = resultado.drop(
         columns=[
             coluna
-            for coluna in colunas_remover
+            for coluna in [
+                "produto_atual",
+                "produto_historico",
+            ]
             if coluna in resultado.columns
         ]
     )
@@ -5327,40 +5470,93 @@ elif pagina == "📦 Encomendas":
         FORNECEDORES,
     )
 
-    if str(
-        fornecedor
-    ).strip().casefold() == "logista":
+    dias_encomenda = [
+        "Segunda-feira",
+        "Terça-feira",
+        "Quarta-feira",
+        "Quinta-feira",
+        "Sexta-feira",
+    ]
 
-        regra = obter_regra_logista()
+    hoje = hoje_portugal()
 
-        if regra is not None:
+    dia_automatico = {
+        0: "Segunda-feira",
+        1: "Terça-feira",
+        2: "Quarta-feira",
+        3: "Quinta-feira",
+        4: "Sexta-feira",
+    }.get(
+        hoje.weekday(),
+        "Segunda-feira",
+    )
 
-            hoje = hoje_portugal()
+    indice_automatico = (
+        dias_encomenda.index(
+            dia_automatico
+        )
+    )
 
-            data_entrega = (
-                hoje
-                + timedelta(
-                    days=regra[
-                        "entrega_em_dias"
-                    ]
-                )
+    dia_encomenda = st.selectbox(
+        "Encomenda a preparar",
+        dias_encomenda,
+        index=indice_automatico,
+    )
+
+    usar_stock_mais_recente = st.toggle(
+        (
+            "Usar o stock mais recente disponível "
+            "quando ainda não existir stock desse dia"
+        ),
+        value=True,
+    )
+
+    if (
+        str(
+            fornecedor
+        )
+        .strip()
+        .casefold()
+        == "logista"
+    ):
+
+        regra = obter_regra_logista(
+            dia_encomenda
+        )
+
+        data_encomenda = (
+            obter_data_operacional_logista(
+                dia_encomenda
             )
+        )
 
-            st.info(
-                (
-                    f"**Encomenda de "
-                    f"{regra['dia_encomenda']}**  \n"
-                    f"Receção prevista: "
-                    f"**{data_entrega.strftime('%d/%m/%Y')}**  \n"
-                    f"Cobertura: "
-                    f"**{regra['cobertura']}**  \n"
-                    f"Vendas de referência: "
-                    f"**{regra['historico']}**"
-                )
+        data_entrega = (
+            data_encomenda
+            + timedelta(
+                days=regra[
+                    "entrega_em_dias"
+                ]
             )
+        )
+
+        st.info(
+            (
+                f"**Encomenda operacional:** "
+                f"{dia_encomenda}, "
+                f"{data_encomenda.strftime('%d/%m/%Y')}  \n"
+                f"**Receção prevista:** "
+                f"{data_entrega.strftime('%d/%m/%Y')}  \n"
+                f"**Cobertura:** "
+                f"{regra['cobertura']}  \n"
+                f"**Vendas de referência:** "
+                f"{regra['historico']}"
+            )
+        )
 
     resultado, erro = calcular_encomenda(
-        fornecedor
+        fornecedor,
+        dia_encomenda,
+        usar_stock_mais_recente,
     )
 
     if erro:
@@ -5370,6 +5566,44 @@ elif pagina == "📦 Encomendas":
         )
 
         st.stop()
+
+    stock_provisorio = bool(
+        resultado[
+            "stock_provisorio"
+        ].iloc[
+            0
+        ]
+    )
+
+    dia_stock_usado = str(
+        resultado[
+            "dia_stock_usado"
+        ].iloc[
+            0
+        ]
+    )
+
+    if stock_provisorio:
+
+        st.warning(
+            (
+                f"⚠️ Ainda não existe stock de "
+                f"{dia_encomenda}. "
+                f"O cálculo está a usar provisoriamente "
+                f"o stock de {dia_stock_usado}. "
+                f"Revê a encomenda depois de carregar "
+                f"o stock correto."
+            )
+        )
+
+    else:
+
+        st.success(
+            (
+                f"Stock usado no cálculo: "
+                f"{dia_stock_usado}."
+            )
+        )
 
     mostrar_apenas = st.toggle(
         "Mostrar apenas produtos a encomendar",
@@ -5434,7 +5668,9 @@ elif pagina == "📦 Encomendas":
     nomes_colunas = {
         "referencia": "Referência",
         "produto": "Produto",
-        "vendas_referencia": "Vendas de referência",
+        "vendas_referencia": (
+            "Vendas de referência"
+        ),
         "stock_phc": "Stock PHC",
         "faturas_posteriores": (
             "Faturas com saída posterior"
@@ -5459,10 +5695,10 @@ elif pagina == "📦 Encomendas":
 
     st.caption(
         (
-            "As faturas cuja saída acontece depois do período "
-            "coberto são temporariamente adicionadas ao stock. "
-            "As voltas não são adicionadas porque o stock já saiu "
-            "fisicamente do armazém e já está refletido no PHC."
+            "Podes preparar uma encomenda antecipadamente. "
+            "Quando ainda não existir a listagem de stock "
+            "do dia escolhido, o cálculo usa o stock mais "
+            "recente disponível e apresenta um aviso."
         )
     )
 
@@ -5475,6 +5711,7 @@ elif pagina == "📦 Encomendas":
         file_name=(
             f"encomenda_"
             f"{fornecedor}_"
+            f"{dia_encomenda}_"
             f"{hoje_portugal().isoformat()}"
             f".xlsx"
         ),
