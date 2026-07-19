@@ -4898,7 +4898,7 @@ elif pagina == "🧠 Assistente":
 elif pagina == "📥 Importar inventário":
 
     st.title(
-        "Importar inventário"
+        "📥 Importar inventário"
     )
 
     fornecedor = st.selectbox(
@@ -4906,19 +4906,104 @@ elif pagina == "📥 Importar inventário":
         FORNECEDORES,
     )
 
-    periodo = st.radio(
-        "Período",
-        PERIODOS,
+    dias_encomenda = [
+        "Segunda-feira",
+        "Terça-feira",
+        "Quarta-feira",
+        "Quinta-feira",
+        "Sexta-feira",
+    ]
+
+    tipo_listagem = st.radio(
+        "Tipo de listagem",
+        [
+            "Stock atual",
+            "Vendas de referência",
+        ],
         horizontal=True,
     )
 
-    dia_semana = st.selectbox(
-        "Dia da semana",
-        DIAS_SEMANA,
+    dia_encomenda = st.selectbox(
+        "Encomenda a preparar",
+        dias_encomenda,
+    )
+
+    if tipo_listagem == "Stock atual":
+
+        periodo = "Atual"
+
+        dia_semana = dia_encomenda
+
+        descricao = (
+            f"{fornecedor} — Stock atual — "
+            f"{dia_encomenda}"
+        )
+
+        ajuda = (
+            f"Carrega a listagem com o stock disponível "
+            f"para preparar a encomenda de "
+            f"{dia_encomenda}."
+        )
+
+    else:
+
+        periodo = "Anterior"
+
+        regra = obter_regra_logista(
+            dia_encomenda
+        )
+
+        if (
+            str(
+                fornecedor
+            )
+            .strip()
+            .casefold()
+            == "logista"
+            and regra is not None
+        ):
+
+            dia_semana = regra[
+                "dia_inventario_anterior"
+            ]
+
+            descricao = (
+                f"{fornecedor} — Vendas de referência — "
+                f"{dia_encomenda}"
+            )
+
+            ajuda = (
+                f"Histórico esperado: "
+                f"{regra['historico']}."
+            )
+
+        else:
+
+            dia_semana = dia_encomenda
+
+            descricao = (
+                f"{fornecedor} — Vendas de referência — "
+                f"{dia_encomenda}"
+            )
+
+            ajuda = (
+                "Carrega a listagem histórica usada "
+                "como referência para esta encomenda."
+            )
+
+    st.info(
+        ajuda
+    )
+
+    st.caption(
+        (
+            f"Esta listagem será guardada internamente como: "
+            f"{periodo} — {dia_semana}."
+        )
     )
 
     ficheiro = st.file_uploader(
-        f"{fornecedor} — {periodo} — {dia_semana}",
+        descricao,
         type=[
             "xlsx",
             "csv",
@@ -4927,7 +5012,8 @@ elif pagina == "📥 Importar inventário":
             f"upload_"
             f"{fornecedor}_"
             f"{periodo}_"
-            f"{dia_semana}"
+            f"{dia_semana}_"
+            f"{dia_encomenda}"
         ),
     )
 
@@ -4942,51 +5028,66 @@ elif pagina == "📥 Importar inventário":
             )
 
             st.session_state.inventarios[
-    fornecedor
-][periodo][dia_semana] = dados
+                fornecedor
+            ][
+                periodo
+            ][
+                dia_semana
+            ] = dados
 
             st.session_state.nomes_ficheiros[
-    fornecedor
-][periodo][dia_semana] = ficheiro.name
+                fornecedor
+            ][
+                periodo
+            ][
+                dia_semana
+            ] = ficheiro.name
 
             guardar_inventario_db(
-    fornecedor,
-    periodo,
-    dia_semana,
-    ficheiro.name,
-    dados,
-)
+                fornecedor,
+                periodo,
+                dia_semana,
+                ficheiro.name,
+                dados,
+            )
 
             st.success(
-
-                f"{fornecedor} {periodo.lower()} "
-                f"carregado: {len(dados)} linhas."
+                (
+                    f"{tipo_listagem} carregado para "
+                    f"{dia_encomenda}: "
+                    f"{len(dados)} linhas."
+                )
             )
 
             st.caption(
-
-                f"Cabeçalho identificado "
-                f"na linha {cabecalho + 1}."
+                (
+                    f"Cabeçalho identificado "
+                    f"na linha {cabecalho + 1}."
+                )
             )
 
             st.dataframe(
-
                 dados.head(
                     30
                 ),
-
-                use_container_width=True,
-
+                width="stretch",
                 hide_index=True,
             )
 
         except Exception as erro:
 
             st.error(
-
-                f"Não consegui ler o ficheiro: "
-                f"{erro}"
+                (
+                    f"Não consegui ler o ficheiro: "
+                    f"{erro}"
+                )
             )
+
+    st.divider()
+
+    st.subheader(
+        "Listagens carregadas"
+    )
 
     estado = []
 
@@ -5011,8 +5112,9 @@ elif pagina == "📥 Importar inventário":
 
                 if not isinstance(
                     nomes_fornecedor,
-                    dict
+                    dict,
                 ):
+
                     nomes_fornecedor = {}
 
                 nomes_periodo = nomes_fornecedor.get(
@@ -5021,19 +5123,24 @@ elif pagina == "📥 Importar inventário":
 
                 if isinstance(
                     nomes_periodo,
-                    dict
+                    dict,
                 ):
-                    ficheiro_guardado = nomes_periodo.get(
-                        nome_dia
+
+                    ficheiro_guardado = (
+                        nomes_periodo.get(
+                            nome_dia
+                        )
                     )
 
                 elif isinstance(
                     nomes_periodo,
-                    str
+                    str,
                 ):
+
                     ficheiro_guardado = nomes_periodo
 
                 else:
+
                     ficheiro_guardado = None
 
                 if (
@@ -5041,15 +5148,65 @@ elif pagina == "📥 Importar inventário":
                     or ficheiro_guardado
                 ):
 
+                    if nome_periodo == "Atual":
+
+                        tipo_visual = "Stock atual"
+
+                        encomenda_associada = (
+                            nome_dia
+                        )
+
+                    else:
+
+                        tipo_visual = (
+                            "Vendas de referência"
+                        )
+
+                        encomenda_associada = (
+                            nome_dia
+                        )
+
+                        if (
+                            str(
+                                nome_fornecedor
+                            )
+                            .strip()
+                            .casefold()
+                            == "logista"
+                        ):
+
+                            mapa_referencia = {
+                                "Terça-feira":
+                                    "Segunda-feira",
+                                "Quarta-feira":
+                                    "Terça-feira",
+                                "Quinta-feira":
+                                    "Quarta-feira",
+                                "Sexta-feira":
+                                    "Quinta-feira",
+                                "Segunda-feira":
+                                    "Sexta-feira",
+                            }
+
+                            encomenda_associada = (
+                                mapa_referencia.get(
+                                    nome_dia,
+                                    nome_dia,
+                                )
+                            )
+
                     estado.append(
                         {
                             "Fornecedor":
                                 nome_fornecedor,
 
-                            "Período":
-                                nome_periodo,
+                            "Tipo":
+                                tipo_visual,
 
-                            "Dia":
+                            "Encomenda":
+                                encomenda_associada,
+
+                            "Dia técnico":
                                 nome_dia,
 
                             "Ficheiro":
@@ -5057,11 +5214,13 @@ elif pagina == "📥 Importar inventário":
                                 or "Sem nome",
 
                             "Linhas":
-                                len(
-                                    dados
-                                )
-                                if dados is not None
-                                else 0,
+                                (
+                                    len(
+                                        dados
+                                    )
+                                    if dados is not None
+                                    else 0
+                                ),
                         }
                     )
 
@@ -5071,7 +5230,7 @@ elif pagina == "📥 Importar inventário":
             pd.DataFrame(
                 estado
             ),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
